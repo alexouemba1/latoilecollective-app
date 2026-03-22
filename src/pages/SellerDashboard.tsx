@@ -91,12 +91,6 @@ const PLATFORM_COMMISSION_RATE = 0.1;
 const ESTIMATED_PAYMENT_FEE_RATE = 0.03;
 const MAX_IMAGES = 5;
 
-/**
- * Compression image
- * - produits : largeur max 1600px
- * - profil artiste : largeur max 1200px
- * - conversion JPEG optimisée pour alléger le site
- */
 const MAX_PRODUCT_IMAGE_WIDTH = 1600;
 const MAX_PROFILE_IMAGE_WIDTH = 1200;
 const IMAGE_QUALITY = 0.78;
@@ -196,6 +190,46 @@ function formatEuro(value: number): string {
   return `${value.toFixed(2)}€`;
 }
 
+function normalizeArtistRow(artist: any): ArtistProfile {
+  return {
+    id: Number(artist?.id ?? 0),
+    userId: Number(artist?.userId ?? 0),
+    bio: artist?.bio ?? "",
+    profileImage: artist?.profileImage ?? "",
+    commissionRate: artist?.commissionRate ?? null,
+    isVerified: Boolean(artist?.isVerified ?? false),
+    stripeAccountId: artist?.stripeAccountId ?? null,
+    stripeOnboardingComplete: Boolean(artist?.stripeOnboardingComplete ?? false),
+    isActive: artist?.isActive ?? true,
+    profileImagePositionX: Number(artist?.profileImagePositionX ?? 50),
+    profileImagePositionY: Number(artist?.profileImagePositionY ?? 50),
+    shippingStandardEnabled: artist?.shippingStandardEnabled ?? true,
+    shippingExpressEnabled: artist?.shippingExpressEnabled ?? true,
+    shippingPickupEnabled: artist?.shippingPickupEnabled ?? false,
+    shippingStandardPrice: Number(artist?.shippingStandardPrice ?? 7.9),
+    shippingExpressPrice: Number(artist?.shippingExpressPrice ?? 14.9),
+    freeShippingThreshold: Number(artist?.freeShippingThreshold ?? 200),
+    shippingCountries: artist?.shippingCountries ?? "France",
+    shippingProcessingDays: Number(artist?.shippingProcessingDays ?? 3),
+    pickupInstructions: artist?.pickupInstructions ?? "",
+  };
+}
+
+function buildProfileForm(profile: ArtistProfile): ProfileForm {
+  return {
+    bio: profile.bio ?? "",
+    shippingStandardEnabled: Boolean(profile.shippingStandardEnabled ?? true),
+    shippingExpressEnabled: Boolean(profile.shippingExpressEnabled ?? true),
+    shippingPickupEnabled: Boolean(profile.shippingPickupEnabled ?? false),
+    shippingStandardPrice: String(profile.shippingStandardPrice ?? 7.9),
+    shippingExpressPrice: String(profile.shippingExpressPrice ?? 14.9),
+    freeShippingThreshold: String(profile.freeShippingThreshold ?? 200),
+    shippingCountries: profile.shippingCountries ?? "France",
+    shippingProcessingDays: String(profile.shippingProcessingDays ?? 3),
+    pickupInstructions: profile.pickupInstructions ?? "",
+  };
+}
+
 export default function SellerDashboard() {
   const [, setLocation] = useLocation();
 
@@ -286,55 +320,54 @@ export default function SellerDashboard() {
       .maybeSingle();
 
     if (artistError) {
-      console.error("Erreur artist:", artistError);
+      console.error("Erreur chargement profil artiste:", artistError);
+      setArtistProfile(null);
+      setArtistId(null);
+      setArtistUserId(null);
+      setProfileImagePreviewUrl("");
+      setProfileImagePosition({ x: 50, y: 50 });
+      setProfileForm({
+        bio: "",
+        shippingStandardEnabled: true,
+        shippingExpressEnabled: true,
+        shippingPickupEnabled: false,
+        shippingStandardPrice: "7.90",
+        shippingExpressPrice: "14.90",
+        freeShippingThreshold: "200",
+        shippingCountries: "France",
+        shippingProcessingDays: "3",
+        pickupInstructions: "",
+      });
       return null;
     }
 
     if (!artist) {
-      console.warn("Aucun profil artiste trouvé pour userId:", userId);
+      setArtistProfile(null);
+      setArtistId(null);
+      setArtistUserId(null);
+      setProfileImagePreviewUrl("");
+      setProfileImagePosition({ x: 50, y: 50 });
+      setProfileForm({
+        bio: "",
+        shippingStandardEnabled: true,
+        shippingExpressEnabled: true,
+        shippingPickupEnabled: false,
+        shippingStandardPrice: "7.90",
+        shippingExpressPrice: "14.90",
+        freeShippingThreshold: "200",
+        shippingCountries: "France",
+        shippingProcessingDays: "3",
+        pickupInstructions: "",
+      });
       return null;
     }
 
-    const normalizedArtist: ArtistProfile = {
-      id: Number(artist.id),
-      userId: Number(artist.userId),
-      bio: artist.bio ?? "",
-      profileImage: artist.profileImage ?? "",
-      commissionRate: artist.commissionRate ?? null,
-      isVerified: artist.isVerified ?? false,
-      stripeAccountId: artist.stripeAccountId ?? null,
-      stripeOnboardingComplete: artist.stripeOnboardingComplete ?? false,
-      isActive: artist.isActive ?? true,
-      profileImagePositionX: Number(artist.profileImagePositionX ?? 50),
-      profileImagePositionY: Number(artist.profileImagePositionY ?? 50),
-      shippingStandardEnabled: artist.shippingStandardEnabled ?? true,
-      shippingExpressEnabled: artist.shippingExpressEnabled ?? true,
-      shippingPickupEnabled: artist.shippingPickupEnabled ?? false,
-      shippingStandardPrice: Number(artist.shippingStandardPrice ?? 7.9),
-      shippingExpressPrice: Number(artist.shippingExpressPrice ?? 14.9),
-      freeShippingThreshold: Number(artist.freeShippingThreshold ?? 200),
-      shippingCountries: artist.shippingCountries ?? "France",
-      shippingProcessingDays: Number(artist.shippingProcessingDays ?? 3),
-      pickupInstructions: artist.pickupInstructions ?? "",
-    };
+    const normalizedArtist = normalizeArtistRow(artist);
 
     setArtistProfile(normalizedArtist);
-    setArtistId(normalizedArtist.id);
-    setArtistUserId(normalizedArtist.userId);
-
-    setProfileForm({
-      bio: normalizedArtist.bio ?? "",
-      shippingStandardEnabled: Boolean(normalizedArtist.shippingStandardEnabled ?? true),
-      shippingExpressEnabled: Boolean(normalizedArtist.shippingExpressEnabled ?? true),
-      shippingPickupEnabled: Boolean(normalizedArtist.shippingPickupEnabled ?? false),
-      shippingStandardPrice: String(normalizedArtist.shippingStandardPrice ?? 7.9),
-      shippingExpressPrice: String(normalizedArtist.shippingExpressPrice ?? 14.9),
-      freeShippingThreshold: String(normalizedArtist.freeShippingThreshold ?? 200),
-      shippingCountries: normalizedArtist.shippingCountries ?? "France",
-      shippingProcessingDays: String(normalizedArtist.shippingProcessingDays ?? 3),
-      pickupInstructions: normalizedArtist.pickupInstructions ?? "",
-    });
-
+    setArtistId(normalizedArtist.id || null);
+    setArtistUserId(normalizedArtist.userId || null);
+    setProfileForm(buildProfileForm(normalizedArtist));
     setProfileImagePreviewUrl(normalizedArtist.profileImage ?? "");
     setProfileImagePosition({
       x: Number(normalizedArtist.profileImagePositionX ?? 50),
@@ -373,8 +406,11 @@ export default function SellerDashboard() {
 
     setArtistName(appUser.name || appUser.email || "Artiste");
 
-    const artist = await loadArtistProfileByUserId(appUser.id);
-    if (!artist) return null;
+    const artist = await loadArtistProfileByUserId(Number(appUser.id));
+
+    if (!artist?.id) {
+      return null;
+    }
 
     return Number(artist.id);
   }
@@ -405,9 +441,9 @@ export default function SellerDashboard() {
       }
 
       const normalizedProducts: SellerProduct[] = (productsData || []).map((item: any) => ({
-        id: item.id,
+        id: Number(item.id),
         artistId: item.artistId ?? null,
-        title: item.title,
+        title: item.title ?? "",
         description: item.description ?? "",
         price: Number(item.price ?? 0),
         pictoremCost:
@@ -443,18 +479,22 @@ export default function SellerDashboard() {
         return;
       }
 
-      const productIds = [...new Set(orderItems.map((item: any) => item.productId))];
-      const orderIds = [...new Set(orderItems.map((item: any) => item.orderId))];
+      const productIds = [...new Set(orderItems.map((item: any) => item.productId).filter(Boolean))];
+      const orderIds = [...new Set(orderItems.map((item: any) => item.orderId).filter(Boolean))];
 
       const [
         { data: linkedProducts, error: linkedProductsError },
         { data: ordersData, error: ordersError },
       ] = await Promise.all([
-        supabase
-          .from("products")
-          .select("id, title, category, pictorem_cost")
-          .in("id", productIds),
-        supabase.from("orders").select("id, status, createdAt").in("id", orderIds),
+        productIds.length > 0
+          ? supabase
+              .from("products")
+              .select("id, title, category, pictorem_cost")
+              .in("id", productIds)
+          : Promise.resolve({ data: [], error: null }),
+        orderIds.length > 0
+          ? supabase.from("orders").select("id, status, createdAt").in("id", orderIds)
+          : Promise.resolve({ data: [], error: null }),
       ]);
 
       if (linkedProductsError) {
@@ -471,7 +511,7 @@ export default function SellerDashboard() {
       >();
 
       for (const product of linkedProducts || []) {
-        productMap.set(product.id, {
+        productMap.set(Number(product.id), {
           title: product.title ?? "Produit",
           category: product.category ?? "Autre",
           pictoremCost:
@@ -483,21 +523,21 @@ export default function SellerDashboard() {
 
       const orderMap = new Map<number, { status: string; createdAt: string }>();
       for (const order of ordersData || []) {
-        orderMap.set(order.id, {
+        orderMap.set(Number(order.id), {
           status: order.status ?? "pending",
           createdAt: order.createdAt ?? "",
         });
       }
 
       const normalizedSales: SaleRow[] = orderItems.map((item: any) => {
-        const linkedProduct = productMap.get(item.productId);
-        const linkedOrder = orderMap.get(item.orderId);
+        const linkedProduct = productMap.get(Number(item.productId));
+        const linkedOrder = orderMap.get(Number(item.orderId));
 
         return {
-          id: item.id,
-          orderId: item.orderId,
-          productId: item.productId,
-          artistId: item.artistId,
+          id: Number(item.id),
+          orderId: Number(item.orderId),
+          productId: Number(item.productId),
+          artistId: Number(item.artistId),
           quantity: Number(item.quantity ?? 0),
           priceAtPurchase: Number(item.priceAtPurchase ?? 0),
           createdAt: item.createdAt,
@@ -1099,46 +1139,12 @@ export default function SellerDashboard() {
         throw new Error("Aucune ligne artiste mise à jour.");
       }
 
-      const normalizedArtist: ArtistProfile = {
-        id: Number(updatedArtist.id),
-        userId: Number(updatedArtist.userId),
-        bio: updatedArtist.bio ?? "",
-        profileImage: updatedArtist.profileImage ?? "",
-        commissionRate: updatedArtist.commissionRate ?? null,
-        isVerified: updatedArtist.isVerified ?? false,
-        stripeAccountId: updatedArtist.stripeAccountId ?? null,
-        stripeOnboardingComplete: updatedArtist.stripeOnboardingComplete ?? false,
-        isActive: updatedArtist.isActive ?? true,
-        profileImagePositionX: Number(updatedArtist.profileImagePositionX ?? 50),
-        profileImagePositionY: Number(updatedArtist.profileImagePositionY ?? 50),
-        shippingStandardEnabled: updatedArtist.shippingStandardEnabled ?? true,
-        shippingExpressEnabled: updatedArtist.shippingExpressEnabled ?? true,
-        shippingPickupEnabled: updatedArtist.shippingPickupEnabled ?? false,
-        shippingStandardPrice: Number(updatedArtist.shippingStandardPrice ?? 7.9),
-        shippingExpressPrice: Number(updatedArtist.shippingExpressPrice ?? 14.9),
-        freeShippingThreshold: Number(updatedArtist.freeShippingThreshold ?? 200),
-        shippingCountries: updatedArtist.shippingCountries ?? "France",
-        shippingProcessingDays: Number(updatedArtist.shippingProcessingDays ?? 3),
-        pickupInstructions: updatedArtist.pickupInstructions ?? "",
-      };
+      const normalizedArtist = normalizeArtistRow(updatedArtist);
 
       setArtistProfile(normalizedArtist);
-      setArtistId(normalizedArtist.id);
-      setArtistUserId(normalizedArtist.userId);
-
-      setProfileForm({
-        bio: normalizedArtist.bio ?? "",
-        shippingStandardEnabled: Boolean(normalizedArtist.shippingStandardEnabled ?? true),
-        shippingExpressEnabled: Boolean(normalizedArtist.shippingExpressEnabled ?? true),
-        shippingPickupEnabled: Boolean(normalizedArtist.shippingPickupEnabled ?? false),
-        shippingStandardPrice: String(normalizedArtist.shippingStandardPrice ?? 7.9),
-        shippingExpressPrice: String(normalizedArtist.shippingExpressPrice ?? 14.9),
-        freeShippingThreshold: String(normalizedArtist.freeShippingThreshold ?? 200),
-        shippingCountries: normalizedArtist.shippingCountries ?? "France",
-        shippingProcessingDays: String(normalizedArtist.shippingProcessingDays ?? 3),
-        pickupInstructions: normalizedArtist.pickupInstructions ?? "",
-      });
-
+      setArtistId(normalizedArtist.id || null);
+      setArtistUserId(normalizedArtist.userId || null);
+      setProfileForm(buildProfileForm(normalizedArtist));
       setProfileImageFile(null);
       setProfileImagePreviewUrl(normalizedArtist.profileImage ?? "");
       setProfileImagePosition({
