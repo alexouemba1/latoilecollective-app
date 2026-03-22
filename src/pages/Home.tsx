@@ -649,14 +649,16 @@ export default function Home() {
                       </div>
                     </div>
 
-                    <div className="p-6">
-                      <p className="min-h-[72px] text-slate-600">{artist.bio}</p>
+                   <div className="p-6">
+  <p className="min-h-[112px] text-slate-600 leading-relaxed line-clamp-4">
+    {artist.bio}
+  </p>
 
-                      <div className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-amber-700">
-                        Découvrir son univers
-                        <ArrowUpRight className="h-4 w-4" />
-                      </div>
-                    </div>
+  <div className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-amber-700">
+    Découvrir son univers
+    <ArrowUpRight className="h-4 w-4" />
+  </div>
+</div>
                   </div>
                 </Link>
               ))}
