@@ -197,7 +197,7 @@ export default function Home() {
 
   const heroArtwork = featuredProducts[0] ?? null;
   const secondArtwork = featuredProducts[1] ?? null;
-  const thirdArtwork = featuredProducts[2] ?? null;
+ 
 
   const heroImage = useMemo(() => {
     return heroArtwork?.images?.[0] || DEFAULT_HERO_IMAGE;
