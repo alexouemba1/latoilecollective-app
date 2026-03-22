@@ -46,6 +46,7 @@ type SaleRow = {
   createdAt?: string;
   productTitle: string;
   productCategory: string;
+  productPictoremCost: number | null;
   orderStatus: string;
   orderDate: string;
 };
@@ -445,7 +446,7 @@ export default function SellerDashboard() {
         { data: linkedProducts, error: linkedProductsError },
         { data: ordersData, error: ordersError },
       ] = await Promise.all([
-        supabase.from("products").select("id, title, category").in("id", productIds),
+        supabase.from("products").select("id, title, category, pictorem_cost").in("id", productIds),
         supabase.from("orders").select("id, status, createdAt").in("id", orderIds),
       ]);
 
@@ -457,11 +458,19 @@ export default function SellerDashboard() {
         throw new Error(ordersError.message);
       }
 
-      const productMap = new Map<number, { title: string; category: string }>();
+      const productMap = new Map<
+        number,
+        { title: string; category: string; pictoremCost: number | null }
+      >();
+
       for (const product of linkedProducts || []) {
         productMap.set(product.id, {
           title: product.title ?? "Produit",
           category: product.category ?? "Autre",
+          pictoremCost:
+            product.pictorem_cost === null || product.pictorem_cost === undefined
+              ? null
+              : Number(product.pictorem_cost),
         });
       }
 
@@ -487,6 +496,7 @@ export default function SellerDashboard() {
           createdAt: item.createdAt,
           productTitle: linkedProduct?.title ?? "Produit supprimé",
           productCategory: linkedProduct?.category ?? "Autre",
+          productPictoremCost: linkedProduct?.pictoremCost ?? null,
           orderStatus: linkedOrder?.status ?? "pending",
           orderDate: linkedOrder?.createdAt ?? item.createdAt ?? "",
         };
@@ -544,8 +554,14 @@ export default function SellerDashboard() {
   }, [sales]);
 
   const totalArtistEarnings = useMemo(() => {
-    return grossSalesAmount * (1 - PLATFORM_COMMISSION_RATE);
-  }, [grossSalesAmount]);
+    return sales.reduce((sum, sale) => {
+      const gross = sale.priceAtPurchase * sale.quantity;
+      const pictoremCostUnit = sale.productPictoremCost ?? 0;
+      const pictoremCostTotal = pictoremCostUnit * sale.quantity;
+
+      return sum + estimateNetEarningsOnSale(gross, pictoremCostTotal);
+    }, 0);
+  }, [sales]);
 
   const soldProductIds = useMemo(() => {
     return new Set(sales.map((sale) => sale.productId));
@@ -1163,22 +1179,23 @@ export default function SellerDashboard() {
       }
 
       const pictoremTotalEur = safeNumber(data?.converted?.totalEur);
-      const suggestedPrice = safeNumber(data?.suggestedRetailPrice);
 
       if (pictoremTotalEur <= 0) {
         throw new Error("Prix Pictorem invalide.");
       }
 
+      const localSuggestedPrice = calculateSuggestedRetailPrice(pictoremTotalEur);
+
       setFormData((prev) => ({
         ...prev,
         pictoremCost: String(Number(pictoremTotalEur.toFixed(2))),
         price:
-          isAutoPricingEnabled && suggestedPrice > 0
-            ? String(Number(suggestedPrice.toFixed(2)))
+          isAutoPricingEnabled && localSuggestedPrice > 0
+            ? String(Number(localSuggestedPrice.toFixed(2)))
             : prev.price,
       }));
 
-      if (suggestedPrice > 0) {
+      if (localSuggestedPrice > 0) {
         setIsAutoPricingEnabled(true);
       }
     } catch (err: any) {
@@ -1416,7 +1433,7 @@ export default function SellerDashboard() {
           <div className="rounded-xl border border-slate-200 bg-white p-6">
             <div className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-600">
               <DollarSign className="h-4 w-4" />
-              Gains artiste
+              Net artiste estimé
             </div>
             <p className="text-3xl font-bold text-amber-600">
               {totalArtistEarnings.toFixed(2)}€
@@ -2027,7 +2044,8 @@ export default function SellerDashboard() {
                 </button>
 
                 <div className="rounded-lg bg-slate-50 px-4 py-2 text-sm text-slate-600">
-                  Multiplicateur actuel : ×{suggestedMultiplier > 0 ? suggestedMultiplier.toFixed(2) : "—"}
+                  Multiplicateur actuel : ×
+                  {suggestedMultiplier > 0 ? suggestedMultiplier.toFixed(2) : "—"}
                 </div>
 
                 <div className="rounded-lg bg-slate-50 px-4 py-2 text-sm text-slate-600">
@@ -2385,7 +2403,8 @@ export default function SellerDashboard() {
                       <th className="px-4 py-3 text-left">Catégorie</th>
                       <th className="px-4 py-3 text-left">Qté</th>
                       <th className="px-4 py-3 text-left">Montant brut</th>
-                      <th className="px-4 py-3 text-left">Votre gain</th>
+                      <th className="px-4 py-3 text-left">Coût Pictorem total</th>
+                      <th className="px-4 py-3 text-left">Net artiste estimé</th>
                       <th className="px-4 py-3 text-left">Date</th>
                       <th className="px-4 py-3 text-left">Statut</th>
                     </tr>
@@ -2394,7 +2413,20 @@ export default function SellerDashboard() {
                   <tbody>
                     {sales.map((sale) => {
                       const gross = sale.priceAtPurchase * sale.quantity;
-                      const artistGain = gross * (1 - PLATFORM_COMMISSION_RATE);
+                      const pictoremCostTotal =
+                        sale.productPictoremCost !== null
+                          ? Number((sale.productPictoremCost * sale.quantity).toFixed(2))
+                          : null;
+                      const artistGain =
+                        pictoremCostTotal !== null
+                          ? estimateNetEarningsOnSale(gross, pictoremCostTotal)
+                          : Number(
+                              (
+                                gross -
+                                gross * PLATFORM_COMMISSION_RATE -
+                                gross * ESTIMATED_PAYMENT_FEE_RATE
+                              ).toFixed(2)
+                            );
 
                       return (
                         <tr key={sale.id} className="border-b border-slate-100 hover:bg-slate-50">
@@ -2405,6 +2437,9 @@ export default function SellerDashboard() {
                           <td className="px-4 py-3 text-slate-600">{sale.quantity}</td>
                           <td className="px-4 py-3 font-semibold text-slate-900">
                             {gross.toFixed(2)}€
+                          </td>
+                          <td className="px-4 py-3 text-slate-600">
+                            {pictoremCostTotal !== null ? `${pictoremCostTotal.toFixed(2)}€` : "—"}
                           </td>
                           <td className="px-4 py-3 font-semibold text-amber-600">
                             {artistGain.toFixed(2)}€
