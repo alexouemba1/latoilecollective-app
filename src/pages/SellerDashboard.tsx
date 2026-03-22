@@ -87,6 +87,7 @@ type ProfileForm = {
 };
 
 const PLATFORM_COMMISSION_RATE = 0.1;
+const ESTIMATED_PAYMENT_FEE_RATE = 0.03;
 const MAX_IMAGES = 5;
 
 /**
@@ -99,7 +100,8 @@ const MAX_PRODUCT_IMAGE_WIDTH = 1600;
 const MAX_PROFILE_IMAGE_WIDTH = 1200;
 const IMAGE_QUALITY = 0.78;
 
-const PICTOREM_PRICING_MULTIPLIER = 2;
+const MIN_ABSOLUTE_MARGIN_EUR = 45;
+const MIN_NET_MARGIN_AFTER_FEES_EUR = 35;
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
@@ -133,13 +135,64 @@ function safeNumber(value: string | number | null | undefined): number {
 
 function roundPremiumPrice(value: number): number {
   if (!Number.isFinite(value) || value <= 0) return 0;
-  const rounded = Math.ceil(value / 10) * 10 - 1;
-  return Number(rounded.toFixed(2));
+
+  if (value < 100) {
+    return Number((Math.ceil(value / 5) * 5 - 0.1).toFixed(2));
+  }
+
+  if (value < 300) {
+    return Number((Math.ceil(value / 10) * 10 - 1).toFixed(2));
+  }
+
+  return Number((Math.ceil(value / 50) * 50 - 1).toFixed(2));
+}
+
+function getPricingMultiplier(pictoremCostEuro: number): number {
+  if (!Number.isFinite(pictoremCostEuro) || pictoremCostEuro <= 0) return 0;
+
+  if (pictoremCostEuro <= 25) return 3.2;
+  if (pictoremCostEuro <= 40) return 2.9;
+  if (pictoremCostEuro <= 60) return 2.55;
+  if (pictoremCostEuro <= 90) return 2.3;
+  if (pictoremCostEuro <= 130) return 2.1;
+  if (pictoremCostEuro <= 180) return 1.95;
+  if (pictoremCostEuro <= 260) return 1.82;
+  return 1.72;
+}
+
+function calculateMinimumViablePrice(pictoremCostEuro: number): number {
+  if (!Number.isFinite(pictoremCostEuro) || pictoremCostEuro <= 0) return 0;
+
+  const targetFromAbsoluteMargin = pictoremCostEuro + MIN_ABSOLUTE_MARGIN_EUR;
+
+  const targetFromNetAfterFees =
+    (pictoremCostEuro + MIN_NET_MARGIN_AFTER_FEES_EUR) /
+    (1 - PLATFORM_COMMISSION_RATE - ESTIMATED_PAYMENT_FEE_RATE);
+
+  return Math.max(targetFromAbsoluteMargin, targetFromNetAfterFees);
 }
 
 function calculateSuggestedRetailPrice(pictoremCostEuro: number): number {
   if (!Number.isFinite(pictoremCostEuro) || pictoremCostEuro <= 0) return 0;
-  return roundPremiumPrice(pictoremCostEuro * PICTOREM_PRICING_MULTIPLIER);
+
+  const multiplier = getPricingMultiplier(pictoremCostEuro);
+  const marketPositionedPrice = pictoremCostEuro * multiplier;
+  const minimumViablePrice = calculateMinimumViablePrice(pictoremCostEuro);
+
+  return roundPremiumPrice(Math.max(marketPositionedPrice, minimumViablePrice));
+}
+
+function estimateNetEarningsOnSale(salePrice: number, pictoremCost: number): number {
+  if (!Number.isFinite(salePrice) || salePrice <= 0) return 0;
+
+  const platformFee = salePrice * PLATFORM_COMMISSION_RATE;
+  const paymentFee = salePrice * ESTIMATED_PAYMENT_FEE_RATE;
+
+  return Number((salePrice - pictoremCost - platformFee - paymentFee).toFixed(2));
+}
+
+function formatEuro(value: number): string {
+  return `${value.toFixed(2)}€`;
 }
 
 export default function SellerDashboard() {
@@ -526,6 +579,26 @@ export default function SellerDashboard() {
     return Number((price - pictoremCost).toFixed(2));
   }, [formData.price, formData.pictoremCost]);
 
+  const estimatedNetAfterFees = useMemo(() => {
+    const price = safeNumber(formData.price);
+    const pictoremCost = safeNumber(formData.pictoremCost);
+
+    if (price <= 0 || pictoremCost <= 0) return 0;
+    return estimateNetEarningsOnSale(price, pictoremCost);
+  }, [formData.price, formData.pictoremCost]);
+
+  const suggestedMultiplier = useMemo(() => {
+    return getPricingMultiplier(safeNumber(formData.pictoremCost));
+  }, [formData.pictoremCost]);
+
+  const marginRatePercent = useMemo(() => {
+    const price = safeNumber(formData.price);
+    const pictoremCost = safeNumber(formData.pictoremCost);
+
+    if (price <= 0 || pictoremCost <= 0) return 0;
+    return Number((((price - pictoremCost) / price) * 100).toFixed(1));
+  }, [formData.price, formData.pictoremCost]);
+
   const resetForm = () => {
     setFormData({
       title: "",
@@ -638,7 +711,6 @@ export default function SellerDashboard() {
         throw new Error("Impossible de préparer l’image.");
       }
 
-      // Fond blanc pour éviter les soucis de transparence lors de la conversion JPEG
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, targetWidth, targetHeight);
       ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
@@ -1838,7 +1910,7 @@ export default function SellerDashboard() {
                 {pictoremPricingLoading ? "Calcul Pictorem..." : "Récupérer le prix Pictorem"}
               </button>
 
-              <div className="rounded-lg bg-white px-4 py-2 text-sm text-slate-600 border border-slate-200">
+              <div className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600">
                 Le coût TTC Pictorem sera rempli automatiquement pour la configuration actuelle.
               </div>
             </div>
@@ -1878,20 +1950,20 @@ export default function SellerDashboard() {
                 </div>
 
                 <div className="text-sm text-slate-600">
-                  Règle actuelle : coût Pictorem × {PICTOREM_PRICING_MULTIPLIER}, puis arrondi
-                  premium.
+                  Règle intelligente : multiplicateur premium progressif + marge minimale de
+                  sécurité.
                 </div>
               </div>
             </div>
 
             <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4">
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Prix conseillé
                   </p>
                   <p className="mt-1 text-xl font-bold text-slate-900">
-                    {suggestedRetailPrice > 0 ? `${suggestedRetailPrice.toFixed(2)}€` : "—"}
+                    {suggestedRetailPrice > 0 ? formatEuro(suggestedRetailPrice) : "—"}
                   </p>
                 </div>
 
@@ -1900,15 +1972,13 @@ export default function SellerDashboard() {
                     Prix de vente actuel
                   </p>
                   <p className="mt-1 text-xl font-bold text-amber-600">
-                    {safeNumber(formData.price) > 0
-                      ? `${safeNumber(formData.price).toFixed(2)}€`
-                      : "—"}
+                    {safeNumber(formData.price) > 0 ? formatEuro(safeNumber(formData.price)) : "—"}
                   </p>
                 </div>
 
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Marge estimée
+                    Marge brute estimée
                   </p>
                   <p
                     className={`mt-1 text-xl font-bold ${
@@ -1916,7 +1986,22 @@ export default function SellerDashboard() {
                     }`}
                   >
                     {safeNumber(formData.pictoremCost) > 0 && safeNumber(formData.price) > 0
-                      ? `${estimatedMargin.toFixed(2)}€`
+                      ? formatEuro(estimatedMargin)
+                      : "—"}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Net estimé après frais
+                  </p>
+                  <p
+                    className={`mt-1 text-xl font-bold ${
+                      estimatedNetAfterFees > 0 ? "text-emerald-600" : "text-red-500"
+                    }`}
+                  >
+                    {safeNumber(formData.pictoremCost) > 0 && safeNumber(formData.price) > 0
+                      ? formatEuro(estimatedNetAfterFees)
                       : "—"}
                   </p>
                 </div>
@@ -1942,8 +2027,17 @@ export default function SellerDashboard() {
                 </button>
 
                 <div className="rounded-lg bg-slate-50 px-4 py-2 text-sm text-slate-600">
-                  Exemple : 131,24€ → 269€
+                  Multiplicateur actuel : ×{suggestedMultiplier > 0 ? suggestedMultiplier.toFixed(2) : "—"}
                 </div>
+
+                <div className="rounded-lg bg-slate-50 px-4 py-2 text-sm text-slate-600">
+                  Taux de marge brute : {marginRatePercent > 0 ? `${marginRatePercent}%` : "—"}
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50 p-4 text-sm text-slate-700">
+                Objectif : rester premium, absorber les frais, conserver une vraie rentabilité et
+                éviter de sous-vendre les œuvres fortes.
               </div>
             </div>
 
@@ -2117,7 +2211,8 @@ export default function SellerDashboard() {
                       <th className="px-4 py-3 text-left">Catégorie</th>
                       <th className="px-4 py-3 text-left">Prix</th>
                       <th className="px-4 py-3 text-left">Coût Pictorem</th>
-                      <th className="px-4 py-3 text-left">Marge</th>
+                      <th className="px-4 py-3 text-left">Marge brute</th>
+                      <th className="px-4 py-3 text-left">Net estimé</th>
                       <th className="px-4 py-3 text-left">Stock</th>
                       <th className="px-4 py-3 text-left">Statut</th>
                       <th className="px-4 py-3 text-left">Actions</th>
@@ -2131,6 +2226,10 @@ export default function SellerDashboard() {
                       const margin =
                         product.pictoremCost && product.pictoremCost > 0
                           ? Number((product.price - product.pictoremCost).toFixed(2))
+                          : null;
+                      const netEstimated =
+                        product.pictoremCost && product.pictoremCost > 0
+                          ? estimateNetEarningsOnSale(product.price, product.pictoremCost)
                           : null;
 
                       return (
@@ -2174,6 +2273,19 @@ export default function SellerDashboard() {
                               }`}
                             >
                               {margin === null ? "—" : `${margin.toFixed(2)}€`}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span
+                              className={`font-semibold ${
+                                netEstimated === null
+                                  ? "text-slate-500"
+                                  : netEstimated > 0
+                                    ? "text-emerald-600"
+                                    : "text-red-500"
+                              }`}
+                            >
+                              {netEstimated === null ? "—" : `${netEstimated.toFixed(2)}€`}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-slate-600">{product.stock}</td>
