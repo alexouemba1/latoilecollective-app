@@ -286,11 +286,13 @@ export default function SellerDashboard() {
       .maybeSingle();
 
     if (artistError) {
-      throw new Error(artistError.message);
+      console.error("Erreur artist:", artistError);
+      return null;
     }
 
     if (!artist) {
-      throw new Error("Profil artiste introuvable.");
+      console.warn("Aucun profil artiste trouvé pour userId:", userId);
+      return null;
     }
 
     const normalizedArtist: ArtistProfile = {
@@ -372,6 +374,8 @@ export default function SellerDashboard() {
     setArtistName(appUser.name || appUser.email || "Artiste");
 
     const artist = await loadArtistProfileByUserId(appUser.id);
+    if (!artist) return null;
+
     return Number(artist.id);
   }
 
@@ -446,7 +450,10 @@ export default function SellerDashboard() {
         { data: linkedProducts, error: linkedProductsError },
         { data: ordersData, error: ordersError },
       ] = await Promise.all([
-        supabase.from("products").select("id, title, category, pictorem_cost").in("id", productIds),
+        supabase
+          .from("products")
+          .select("id, title, category, pictorem_cost")
+          .in("id", productIds),
         supabase.from("orders").select("id, status, createdAt").in("id", orderIds),
       ]);
 
