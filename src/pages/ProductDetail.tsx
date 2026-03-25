@@ -1,6 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link, useLocation } from "wouter";
-import { ShoppingCart, ArrowLeft, Heart, X, BadgeCheck, Sparkles } from "lucide-react";
+import {
+  ShoppingCart,
+  ArrowLeft,
+  Heart,
+  X,
+  BadgeCheck,
+  Sparkles,
+  CheckCircle2,
+  AlertCircle,
+  Info,
+} from "lucide-react";
 import { supabase } from "../lib/supabase";
 
 type Product = {
@@ -16,6 +26,14 @@ type Product = {
   isActive: boolean;
   createdAt?: string;
   updatedAt?: string;
+};
+
+type ToastType = "success" | "error" | "info";
+
+type ToastState = {
+  visible: boolean;
+  message: string;
+  type: ToastType;
 };
 
 function getCategoryProjection(category: string) {
@@ -53,12 +71,46 @@ export default function ProductDetail() {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
+  const [toast, setToast] = useState<ToastState>({
+    visible: false,
+    message: "",
+    type: "info",
+  });
 
-  async function resolveCurrentUserId() {
+  const showToast = (message: string, type: ToastType = "info") => {
+    setToast({
+      visible: true,
+      message,
+      type,
+    });
+  };
+
+  const hideToast = () => {
+    setToast((prev) => ({
+      ...prev,
+      visible: false,
+    }));
+  };
+
+  useEffect(() => {
+    if (!toast.visible) return;
+
+    const timeout = window.setTimeout(() => {
+      hideToast();
+    }, 2600);
+
+    return () => window.clearTimeout(timeout);
+  }, [toast.visible]);
+
+  async function resolveCurrentUserId(options?: { redirectToAuth?: boolean }) {
+    const shouldRedirect = options?.redirectToAuth ?? true;
+
     const { data: authData, error: authError } = await supabase.auth.getUser();
 
     if (authError || !authData.user) {
-      setLocation("/auth");
+      if (shouldRedirect) {
+        setLocation("/auth");
+      }
       return null;
     }
 
@@ -71,12 +123,12 @@ export default function ProductDetail() {
       .maybeSingle();
 
     if (appUserError) {
-      alert(`Erreur utilisateur: ${appUserError.message}`);
+      showToast(`Erreur utilisateur : ${appUserError.message}`, "error");
       return null;
     }
 
     if (!appUser) {
-      alert("Profil utilisateur introuvable.");
+      showToast("Profil utilisateur introuvable.", "error");
       return null;
     }
 
@@ -138,7 +190,7 @@ export default function ProductDetail() {
     async function fetchFavoriteStatus() {
       if (!product) return;
 
-      const currentUserId = await resolveCurrentUserId();
+      const currentUserId = await resolveCurrentUserId({ redirectToAuth: false });
       if (!currentUserId) {
         setIsFavorite(false);
         return;
@@ -196,13 +248,14 @@ export default function ProductDetail() {
         .eq("productId", product.id);
 
       if (error) {
-        alert(`Erreur favoris: ${error.message}`);
+        showToast(`Erreur favoris : ${error.message}`, "error");
         setFavoriteLoading(false);
         return;
       }
 
       setIsFavorite(false);
       setFavoriteLoading(false);
+      showToast("Produit retiré des favoris.", "info");
       return;
     }
 
@@ -214,13 +267,14 @@ export default function ProductDetail() {
     ]);
 
     if (error) {
-      alert(`Erreur favoris: ${error.message}`);
+      showToast(`Erreur favoris : ${error.message}`, "error");
       setFavoriteLoading(false);
       return;
     }
 
     setIsFavorite(true);
     setFavoriteLoading(false);
+    showToast("Produit ajouté aux favoris.", "success");
   };
 
   const handleAddToCart = async () => {
@@ -240,7 +294,7 @@ export default function ProductDetail() {
 
     if (existingError) {
       console.error("Erreur vérification panier:", existingError);
-      alert(`Erreur panier: ${existingError.message}`);
+      showToast(`Erreur panier : ${existingError.message}`, "error");
       setAddingToCart(false);
       return;
     }
@@ -255,13 +309,13 @@ export default function ProductDetail() {
 
       if (updateError) {
         console.error("Erreur mise à jour panier:", updateError);
-        alert(`Erreur panier: ${updateError.message}`);
+        showToast(`Erreur panier : ${updateError.message}`, "error");
         setAddingToCart(false);
         return;
       }
 
       setAddingToCart(false);
-      alert("Quantité mise à jour dans le panier.");
+      setLocation("/cart");
       return;
     }
 
@@ -275,13 +329,13 @@ export default function ProductDetail() {
 
     if (insertError) {
       console.error("Erreur ajout panier:", insertError);
-      alert(`Erreur ajout panier: ${insertError.message}`);
+      showToast(`Erreur ajout panier : ${insertError.message}`, "error");
       setAddingToCart(false);
       return;
     }
 
     setAddingToCart(false);
-    alert("Produit ajouté au panier.");
+    setLocation("/cart");
   };
 
   const images = useMemo(() => (Array.isArray(product?.images) ? product!.images : []), [product]);
@@ -293,6 +347,25 @@ export default function ProductDetail() {
   const mainImage = images[selectedImageIndex] || images[0] || "";
   const isOutOfStock = !product || product.stock <= 0;
   const projectionText = product ? getCategoryProjection(product.category) : "";
+
+  const toastStyles =
+    toast.type === "success"
+      ? {
+          wrapper: "border-emerald-200 bg-white text-slate-900 shadow-2xl",
+          iconWrap: "bg-emerald-100 text-emerald-700",
+          progress: "bg-emerald-500",
+        }
+      : toast.type === "error"
+      ? {
+          wrapper: "border-red-200 bg-white text-slate-900 shadow-2xl",
+          iconWrap: "bg-red-100 text-red-700",
+          progress: "bg-red-500",
+        }
+      : {
+          wrapper: "border-amber-200 bg-white text-slate-900 shadow-2xl",
+          iconWrap: "bg-amber-100 text-amber-700",
+          progress: "bg-amber-500",
+        };
 
   if (loading) {
     return (
@@ -318,6 +391,59 @@ export default function ProductDetail() {
 
   return (
     <div className="min-h-screen bg-slate-50">
+      {toast.visible && (
+        <div className="pointer-events-none fixed right-4 top-4 z-[100] w-full max-w-sm">
+          <div
+            className={`pointer-events-auto overflow-hidden rounded-2xl border ${toastStyles.wrapper} animate-in slide-in-from-top-2 fade-in duration-300`}
+          >
+            <div className="flex items-start gap-3 p-4">
+              <div className={`mt-0.5 rounded-full p-2 ${toastStyles.iconWrap}`}>
+                {toast.type === "success" ? (
+                  <CheckCircle2 className="h-5 w-5" />
+                ) : toast.type === "error" ? (
+                  <AlertCircle className="h-5 w-5" />
+                ) : (
+                  <Info className="h-5 w-5" />
+                )}
+              </div>
+
+              <div className="flex-1">
+                <p className="text-sm font-semibold">
+                  {toast.type === "success"
+                    ? "Succès"
+                    : toast.type === "error"
+                    ? "Erreur"
+                    : "Information"}
+                </p>
+                <p className="mt-1 text-sm text-slate-600">{toast.message}</p>
+              </div>
+
+              <button
+                type="button"
+                onClick={hideToast}
+                className="rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                aria-label="Fermer la notification"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="h-1 w-full bg-slate-100">
+              <div
+                className={`h-full w-full origin-left animate-[shrink_2.6s_linear_forwards] ${toastStyles.progress}`}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes shrink {
+          from { transform: scaleX(1); }
+          to { transform: scaleX(0); }
+        }
+      `}</style>
+
       <div className="border-b border-slate-200 bg-white">
         <div className="mx-auto max-w-7xl px-4 py-4">
           <Link
@@ -403,9 +529,7 @@ export default function ProductDetail() {
               </p>
 
               <div className="mt-5 rounded-2xl border border-amber-100 bg-amber-50/70 p-4">
-                <p className="text-sm font-medium text-slate-800">
-                  {projectionText}
-                </p>
+                <p className="text-sm font-medium text-slate-800">{projectionText}</p>
               </div>
             </div>
 
@@ -439,8 +563,7 @@ export default function ProductDetail() {
                 {product.price.toFixed(2)}€
               </p>
               <p className="text-slate-600">
-                Stock disponible :{" "}
-                <span className="font-semibold">{product.stock}</span>
+                Stock disponible : <span className="font-semibold">{product.stock}</span>
               </p>
             </div>
 

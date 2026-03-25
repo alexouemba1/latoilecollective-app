@@ -950,10 +950,14 @@ export default function Home() {
                 </li>
               </ul>
             </div>
-
             <div>
               <h4 className="mb-4 font-semibold">Contact</h4>
-              <p className="text-sm text-slate-400">contact@latoilecollective.com</p>
+            <Link
+            href="/contact"
+            className="text-sm text-slate-400 transition hover:text-white"
+            >
+            contact@latoilecolective.com
+          </Link>
             </div>
           </div>
 

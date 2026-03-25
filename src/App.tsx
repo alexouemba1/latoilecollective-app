@@ -12,8 +12,9 @@ import Auth from "./pages/Auth";
 import ArtistPage from "./pages/ArtistPage";
 import Favorites from "./pages/Favorites";
 import Quality from "./pages/Quality";
-import Conditions from "./pages/Conditions"; // ✅ AJOUT
-import Privacy from "./pages/Privacy";       // ✅ AJOUT
+import Conditions from "./pages/Conditions";
+import Privacy from "./pages/Privacy";
+import Contact from "./pages/Contact";
 
 function App() {
   return (
@@ -66,13 +67,16 @@ function App() {
         <Quality />
       </Route>
 
-      {/* ✅ NOUVELLES PAGES */}
       <Route path="/conditions">
         <Conditions />
       </Route>
 
       <Route path="/privacy">
         <Privacy />
+      </Route>
+
+      <Route path="/contact">
+        <Contact />
       </Route>
 
       <Route>

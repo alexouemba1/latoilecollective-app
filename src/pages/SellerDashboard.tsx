@@ -17,6 +17,7 @@ import {
   BadgeCheck,
   Archive,
   Truck,
+  AlertTriangle,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
@@ -87,6 +88,17 @@ type ProfileForm = {
   pickupInstructions: string;
 };
 
+type ConfirmVariant = "danger" | "warning" | "info";
+
+type ConfirmModalState = {
+  open: boolean;
+  title: string;
+  message: string;
+  confirmLabel: string;
+  cancelLabel: string;
+  variant: ConfirmVariant;
+};
+
 const PLATFORM_COMMISSION_RATE = 0.1;
 const ESTIMATED_PAYMENT_FEE_RATE = 0.03;
 const MAX_IMAGES = 5;
@@ -95,8 +107,8 @@ const MAX_PRODUCT_IMAGE_WIDTH = 1600;
 const MAX_PROFILE_IMAGE_WIDTH = 1200;
 const IMAGE_QUALITY = 0.78;
 
-const MIN_ABSOLUTE_MARGIN_EUR = 45;
-const MIN_NET_MARGIN_AFTER_FEES_EUR = 35;
+const PICTOREM_AFFILIATE_URL =
+  "https://www.pictorem.com/fr/canvas-print.html?refer=SI10SBR2TUU";
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
@@ -131,12 +143,16 @@ function safeNumber(value: string | number | null | undefined): number {
 function roundPremiumPrice(value: number): number {
   if (!Number.isFinite(value) || value <= 0) return 0;
 
-  if (value < 100) {
+  if (value < 120) {
     return Number((Math.ceil(value / 5) * 5 - 0.1).toFixed(2));
   }
 
-  if (value < 300) {
+  if (value < 350) {
     return Number((Math.ceil(value / 10) * 10 - 1).toFixed(2));
+  }
+
+  if (value < 700) {
+    return Number((Math.ceil(value / 25) * 25 - 1).toFixed(2));
   }
 
   return Number((Math.ceil(value / 50) * 50 - 1).toFixed(2));
@@ -145,23 +161,51 @@ function roundPremiumPrice(value: number): number {
 function getPricingMultiplier(pictoremCostEuro: number): number {
   if (!Number.isFinite(pictoremCostEuro) || pictoremCostEuro <= 0) return 0;
 
-  if (pictoremCostEuro <= 25) return 3.2;
-  if (pictoremCostEuro <= 40) return 2.9;
+  if (pictoremCostEuro <= 25) return 3.15;
+  if (pictoremCostEuro <= 40) return 2.85;
   if (pictoremCostEuro <= 60) return 2.55;
-  if (pictoremCostEuro <= 90) return 2.3;
-  if (pictoremCostEuro <= 130) return 2.1;
-  if (pictoremCostEuro <= 180) return 1.95;
-  if (pictoremCostEuro <= 260) return 1.82;
-  return 1.72;
+  if (pictoremCostEuro <= 90) return 2.35;
+  if (pictoremCostEuro <= 130) return 2.15;
+  if (pictoremCostEuro <= 180) return 2.02;
+  if (pictoremCostEuro <= 260) return 1.92;
+  if (pictoremCostEuro <= 400) return 1.82;
+  if (pictoremCostEuro <= 600) return 1.74;
+  if (pictoremCostEuro <= 900) return 1.68;
+  return 1.62;
+}
+
+function getMinimumAbsoluteMarginEuro(pictoremCostEuro: number): number {
+  if (!Number.isFinite(pictoremCostEuro) || pictoremCostEuro <= 0) return 0;
+
+  if (pictoremCostEuro <= 80) return 45;
+  if (pictoremCostEuro <= 150) return 60;
+  if (pictoremCostEuro <= 300) return 90;
+  if (pictoremCostEuro <= 500) return 130;
+  if (pictoremCostEuro <= 800) return 180;
+  return 250;
+}
+
+function getMinimumNetAfterFeesEuro(pictoremCostEuro: number): number {
+  if (!Number.isFinite(pictoremCostEuro) || pictoremCostEuro <= 0) return 0;
+
+  if (pictoremCostEuro <= 80) return 35;
+  if (pictoremCostEuro <= 150) return 50;
+  if (pictoremCostEuro <= 300) return 70;
+  if (pictoremCostEuro <= 500) return 100;
+  if (pictoremCostEuro <= 800) return 140;
+  return 180;
 }
 
 function calculateMinimumViablePrice(pictoremCostEuro: number): number {
   if (!Number.isFinite(pictoremCostEuro) || pictoremCostEuro <= 0) return 0;
 
-  const targetFromAbsoluteMargin = pictoremCostEuro + MIN_ABSOLUTE_MARGIN_EUR;
+  const minimumAbsoluteMargin = getMinimumAbsoluteMarginEuro(pictoremCostEuro);
+  const minimumNetAfterFees = getMinimumNetAfterFeesEuro(pictoremCostEuro);
+
+  const targetFromAbsoluteMargin = pictoremCostEuro + minimumAbsoluteMargin;
 
   const targetFromNetAfterFees =
-    (pictoremCostEuro + MIN_NET_MARGIN_AFTER_FEES_EUR) /
+    (pictoremCostEuro + minimumNetAfterFees) /
     (1 - PLATFORM_COMMISSION_RATE - ESTIMATED_PAYMENT_FEE_RATE);
 
   return Math.max(targetFromAbsoluteMargin, targetFromNetAfterFees);
@@ -290,6 +334,68 @@ export default function SellerDashboard() {
   });
 
   const [isAutoPricingEnabled, setIsAutoPricingEnabled] = useState(true);
+
+  const [confirmModal, setConfirmModal] = useState<ConfirmModalState>({
+    open: false,
+    title: "",
+    message: "",
+    confirmLabel: "Confirmer",
+    cancelLabel: "Annuler",
+    variant: "warning",
+  });
+
+  const confirmResolverRef = useRef<((value: boolean) => void) | null>(null);
+
+  const openConfirmModal = ({
+    title,
+    message,
+    confirmLabel = "Confirmer",
+    cancelLabel = "Annuler",
+    variant = "warning",
+  }: Omit<ConfirmModalState, "open">) => {
+    setConfirmModal({
+      open: true,
+      title,
+      message,
+      confirmLabel,
+      cancelLabel,
+      variant,
+    });
+
+    return new Promise<boolean>((resolve) => {
+      confirmResolverRef.current = resolve;
+    });
+  };
+
+  const closeConfirmModal = (confirmed: boolean) => {
+    if (confirmResolverRef.current) {
+      confirmResolverRef.current(confirmed);
+      confirmResolverRef.current = null;
+    }
+
+    setConfirmModal((prev) => ({
+      ...prev,
+      open: false,
+    }));
+  };
+
+  useEffect(() => {
+    if (!confirmModal.open) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeConfirmModal(false);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = "";
+    };
+  }, [confirmModal.open]);
 
   async function loadArtistProfileByUserId(userId: number) {
     const { data: artist, error: artistError } = await supabase
@@ -479,7 +585,9 @@ export default function SellerDashboard() {
         return;
       }
 
-      const productIds = [...new Set(orderItems.map((item: any) => item.productId).filter(Boolean))];
+      const productIds = [
+        ...new Set(orderItems.map((item: any) => item.productId).filter(Boolean)),
+      ];
       const orderIds = [...new Set(orderItems.map((item: any) => item.orderId).filter(Boolean))];
 
       const [
@@ -926,9 +1034,14 @@ export default function SellerDashboard() {
       return;
     }
 
-    const confirmed = window.confirm(
-      "Suspendre votre activité ? Votre profil artiste sera masqué et toutes vos œuvres seront désactivées. Vous pourrez réactiver votre activité plus tard."
-    );
+    const confirmed = await openConfirmModal({
+      title: "Suspendre votre activité ?",
+      message:
+        "Votre profil artiste sera masqué et toutes vos œuvres seront désactivées. Vous pourrez réactiver votre activité plus tard.",
+      confirmLabel: "Suspendre",
+      cancelLabel: "Annuler",
+      variant: "danger",
+    });
 
     if (!confirmed) return;
 
@@ -970,9 +1083,14 @@ export default function SellerDashboard() {
       return;
     }
 
-    const confirmed = window.confirm(
-      "Réactiver votre activité ? Votre profil artiste redeviendra visible. Vos œuvres resteront archivées tant que vous ne les réactivez pas manuellement."
-    );
+    const confirmed = await openConfirmModal({
+      title: "Réactiver votre activité ?",
+      message:
+        "Votre profil artiste redeviendra visible. Vos œuvres resteront archivées tant que vous ne les réactivez pas manuellement.",
+      confirmLabel: "Réactiver",
+      cancelLabel: "Annuler",
+      variant: "info",
+    });
 
     if (!confirmed) return;
 
@@ -1246,9 +1364,14 @@ export default function SellerDashboard() {
       formData.pictoremCost.trim() &&
       safeNumber(formData.price) <= safeNumber(formData.pictoremCost)
     ) {
-      const confirmed = window.confirm(
-        "Le prix de vente est inférieur ou égal au coût Pictorem renseigné. Vous risquez de vendre sans marge. Voulez-vous continuer ?"
-      );
+      const confirmed = await openConfirmModal({
+        title: "Continuer malgré une marge nulle ou négative ?",
+        message:
+          "Le prix de vente est inférieur ou égal au coût Pictorem renseigné. Vous risquez de vendre sans marge.",
+        confirmLabel: "Continuer",
+        cancelLabel: "Revoir le prix",
+        variant: "warning",
+      });
 
       if (!confirmed) {
         return;
@@ -1345,9 +1468,14 @@ export default function SellerDashboard() {
       return;
     }
 
-    const confirmed = window.confirm(
-      "Archiver cette œuvre vendue ? Elle sera masquée de la galerie publique mais restera dans l’historique des ventes."
-    );
+    const confirmed = await openConfirmModal({
+      title: "Archiver cette œuvre ?",
+      message:
+        "Elle sera masquée de la galerie publique mais restera dans l’historique des ventes.",
+      confirmLabel: "Archiver",
+      cancelLabel: "Annuler",
+      variant: "warning",
+    });
 
     if (!confirmed) return;
 
@@ -1379,7 +1507,15 @@ export default function SellerDashboard() {
       return;
     }
 
-    const confirmed = window.confirm("Supprimer cette œuvre ?");
+    const confirmed = await openConfirmModal({
+      title: "Supprimer cette œuvre ?",
+      message:
+        "Cette action est définitive. L’œuvre sera retirée de votre catalogue et ne pourra pas être récupérée.",
+      confirmLabel: "Supprimer",
+      cancelLabel: "Annuler",
+      variant: "danger",
+    });
+
     if (!confirmed) return;
 
     const { error } = await supabase
@@ -1404,8 +1540,76 @@ export default function SellerDashboard() {
 
   const previewImages = [...existingImages, ...localPreviewUrls].slice(0, MAX_IMAGES);
 
+  const confirmStyles =
+    confirmModal.variant === "danger"
+      ? {
+          iconWrap: "bg-red-100 text-red-700",
+          confirmButton: "bg-red-600 text-white hover:bg-red-700",
+        }
+      : confirmModal.variant === "info"
+      ? {
+          iconWrap: "bg-sky-100 text-sky-700",
+          confirmButton: "bg-slate-900 text-white hover:bg-slate-800",
+        }
+      : {
+          iconWrap: "bg-amber-100 text-amber-700",
+          confirmButton: "bg-amber-600 text-white hover:bg-amber-700",
+        };
+
   return (
     <div className="min-h-screen bg-slate-50">
+      {confirmModal.open && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm"
+          onClick={() => closeConfirmModal(false)}
+        >
+          <div
+            className="w-full max-w-md overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6">
+              <div className="flex items-start gap-4">
+                <div className={`rounded-2xl p-3 ${confirmStyles.iconWrap}`}>
+                  <AlertTriangle className="h-6 w-6" />
+                </div>
+
+                <div className="flex-1">
+                  <h3 className="text-xl font-semibold text-slate-900">{confirmModal.title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">{confirmModal.message}</p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => closeConfirmModal(false)}
+                  className="rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                  aria-label="Fermer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => closeConfirmModal(false)}
+                  className="rounded-xl border border-slate-300 px-4 py-3 font-medium text-slate-700 transition hover:bg-slate-100"
+                >
+                  {confirmModal.cancelLabel}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => closeConfirmModal(true)}
+                  className={`rounded-xl px-4 py-3 font-semibold transition ${confirmStyles.confirmButton}`}
+                >
+                  {confirmModal.confirmLabel}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="border-b border-slate-200 bg-white">
         <div className="mx-auto max-w-7xl px-4 py-6">
           <div className="flex items-center justify-between">
@@ -1634,6 +1838,41 @@ export default function SellerDashboard() {
                         ? "Continuer / rouvrir Stripe"
                         : "Connecter Stripe"}
                   </button>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">
+                      Finalisation impression & expédition
+                    </p>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Quand une œuvre est prête à être produite pour un acheteur, vous pouvez
+                      passer par cette étape pour finaliser l’impression, le support et l’envoi.
+                    </p>
+                  </div>
+
+                  <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-amber-800">
+                    Étape de production
+                  </span>
+                </div>
+
+                <div className="rounded-xl border border-amber-200 bg-white p-4 text-sm text-slate-700">
+                  Ce lien vous permet d’avancer vers la mise en production de l’œuvre une fois la
+                  vente prête à être exécutée. Autrement dit : ce n’est pas une sortie du parcours,
+                  c’est la continuité concrète pour préparer l’œuvre destinée à l’acheteur.
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <a
+                    href={PICTOREM_AFFILIATE_URL}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center rounded-lg bg-amber-600 px-4 py-2 text-white hover:bg-amber-700"
+                  >
+                    Finaliser sur Pictorem
+                  </a>
                 </div>
               </div>
 
@@ -1980,8 +2219,8 @@ export default function SellerDashboard() {
                 </div>
 
                 <div className="text-sm text-slate-600">
-                  Règle intelligente : multiplicateur premium progressif + marge minimale de
-                  sécurité.
+                  Règle recalibrée : petits formats plus dynamiques, grands formats plus crédibles,
+                  avec vraie marge de sécurité.
                 </div>
               </div>
             </div>
@@ -2067,8 +2306,8 @@ export default function SellerDashboard() {
               </div>
 
               <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50 p-4 text-sm text-slate-700">
-                Objectif : rester premium, absorber les frais, conserver une vraie rentabilité et
-                éviter de sous-vendre les œuvres fortes.
+                Objectif : éviter de casser la valeur perçue sur les petits formats, tout en
+                restant défendable sur les grands formats où Pictorem grimpe très vite.
               </div>
             </div>
 

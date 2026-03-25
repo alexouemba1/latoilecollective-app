@@ -314,10 +314,17 @@ export default function CheckoutSuccess() {
                 <h3 className="text-lg font-semibold">Options d’impression premium</h3>
               </div>
 
-              <p className="text-slate-700">
-                Votre commande d’impression a bien été transmise. Vous pouvez aussi explorer
-                d’autres formats, finitions et présentations pour sublimer votre œuvre.
-              </p>
+             <p className="text-slate-700">
+  Votre œuvre est prête à être imprimée.
+
+  Vous pouvez maintenant finaliser sa production avec des formats et finitions professionnels :
+
+  • Formats supplémentaires  
+  • Finitions haut de gamme  
+  • Encadrements et présentations  
+
+  👉 Cette étape permet de transformer votre œuvre en pièce physique prête à être livrée à votre acheteur.
+</p>
 
               <div className="mt-4 grid gap-2 text-sm text-slate-600">
                 <div>• Formats supplémentaires</div>
@@ -341,7 +348,7 @@ export default function CheckoutSuccess() {
                     </>
                   ) : (
                     <>
-                      Lancer l’impression automatique
+                      Préparer l’œuvre pour livraison
                       <ExternalLink className="h-4 w-4" />
                     </>
                   )}
