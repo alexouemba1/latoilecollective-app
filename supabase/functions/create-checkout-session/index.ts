@@ -7,6 +7,8 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+const SITE_URL = "https://latoilecolective.com";
+
 type ShippingMethod = "standard" | "express" | "pickup";
 
 type ArtistShippingSettings = {
@@ -20,6 +22,16 @@ type ArtistShippingSettings = {
   shippingProcessingDays: number;
   pickupInstructions: string;
 };
+
+class HttpError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "HttpError";
+    this.status = status;
+  }
+}
 
 const PLATFORM_COMMISSION_RATE = 0.12; // 12%
 const PLATFORM_COMMISSION_MINIMUM_CENTS = 150; // 1,50 €
@@ -71,7 +83,7 @@ function getShippingConfig(params: {
 
   if (method === "pickup") {
     if (!settings.shippingPickupEnabled) {
-      throw new Error("Le retrait sur place n'est pas disponible pour cet artiste.");
+      throw new HttpError(400, "Le retrait sur place n'est pas disponible pour cet artiste.");
     }
 
     return {
@@ -84,7 +96,7 @@ function getShippingConfig(params: {
 
   if (method === "express") {
     if (!settings.shippingExpressEnabled) {
-      throw new Error("La livraison express n'est pas disponible pour cet artiste.");
+      throw new HttpError(400, "La livraison express n'est pas disponible pour cet artiste.");
     }
 
     return {
@@ -96,7 +108,7 @@ function getShippingConfig(params: {
   }
 
   if (!settings.shippingStandardEnabled) {
-    throw new Error("La livraison standard n'est pas disponible pour cet artiste.");
+    throw new HttpError(400, "La livraison standard n'est pas disponible pour cet artiste.");
   }
 
   const isFreeShipping =
@@ -125,14 +137,29 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  if (req.method !== "POST") {
+    return new Response(
+      JSON.stringify({ error: "Méthode non autorisée." }),
+      {
+        status: 405,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+  }
+
   try {
+    console.log("CREATE_CHECKOUT_SESSION_VERSION_FINAL_V1");
+
     const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY");
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    if (!stripeSecretKey) throw new Error("STRIPE_SECRET_KEY manquante.");
-    if (!supabaseUrl) throw new Error("SUPABASE_URL manquante.");
-    if (!supabaseServiceRoleKey) throw new Error("SUPABASE_SERVICE_ROLE_KEY manquante.");
+    if (!stripeSecretKey) throw new HttpError(500, "STRIPE_SECRET_KEY manquante.");
+    if (!supabaseUrl) throw new HttpError(500, "SUPABASE_URL manquante.");
+    if (!supabaseServiceRoleKey) throw new HttpError(500, "SUPABASE_SERVICE_ROLE_KEY manquante.");
 
     const stripe = new Stripe(stripeSecretKey, {
       apiVersion: "2023-10-16",
@@ -144,13 +171,13 @@ Deno.serve(async (req) => {
     const token = authHeader?.replace("Bearer ", "").trim();
 
     if (!token) {
-      throw new Error("Utilisateur non authentifié.");
+      throw new HttpError(401, "Utilisateur non authentifié.");
     }
 
     const { data: authUserData, error: authUserError } = await supabase.auth.getUser(token);
 
     if (authUserError || !authUserData.user) {
-      throw new Error("Utilisateur non authentifié.");
+      throw new HttpError(401, "Utilisateur non authentifié.");
     }
 
     const authUser = authUserData.user;
@@ -162,11 +189,11 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (appUserError) {
-      throw new Error(`Erreur utilisateur: ${appUserError.message}`);
+      throw new HttpError(500, `Erreur utilisateur: ${appUserError.message}`);
     }
 
     if (!appUser) {
-      throw new Error("Profil utilisateur introuvable.");
+      throw new HttpError(404, "Profil utilisateur introuvable.");
     }
 
     let body: {
@@ -189,11 +216,13 @@ Deno.serve(async (req) => {
         body = await req.json();
       }
     } catch {
-      throw new Error("Le body JSON est invalide.");
+      throw new HttpError(400, "Le body JSON est invalide.");
     }
 
-    const successUrl = safeString(body.successUrl) || "http://localhost:5173/checkout-success";
-    const cancelUrl = safeString(body.cancelUrl) || "http://localhost:5173/checkout";
+    const successUrl =
+      safeString(body.successUrl) || `${SITE_URL}/checkout-success`;
+    const cancelUrl =
+      safeString(body.cancelUrl) || `${SITE_URL}/checkout`;
 
     const shippingName = safeString(body.shippingName);
     const shippingAddressLine1 = safeString(body.shippingAddressLine1);
@@ -209,27 +238,27 @@ Deno.serve(async (req) => {
     const requestedShippingMethod = normalizeShippingMethod(body.shippingMethod);
 
     if (!shippingName) {
-      throw new Error("Nom de livraison manquant.");
+      throw new HttpError(400, "Nom de livraison manquant.");
     }
 
     if (!shippingAddressLine1 && requestedShippingMethod !== "pickup") {
-      throw new Error("Adresse de livraison manquante.");
+      throw new HttpError(400, "Adresse de livraison manquante.");
     }
 
     if (!shippingPostalCode && requestedShippingMethod !== "pickup") {
-      throw new Error("Code postal manquant.");
+      throw new HttpError(400, "Code postal manquant.");
     }
 
     if (!shippingCity && requestedShippingMethod !== "pickup") {
-      throw new Error("Ville manquante.");
+      throw new HttpError(400, "Ville manquante.");
     }
 
     if (!shippingCountry && requestedShippingMethod !== "pickup") {
-      throw new Error("Pays manquant.");
+      throw new HttpError(400, "Pays manquant.");
     }
 
     if (!shippingEmail) {
-      throw new Error("Email de livraison manquant.");
+      throw new HttpError(400, "Email de livraison manquant.");
     }
 
     const { data: cartItems, error: cartError } = await supabase
@@ -239,11 +268,11 @@ Deno.serve(async (req) => {
       .order("createdAt", { ascending: false });
 
     if (cartError) {
-      throw new Error(`Erreur panier: ${cartError.message}`);
+      throw new HttpError(500, `Erreur panier: ${cartError.message}`);
     }
 
     if (!cartItems || cartItems.length === 0) {
-      throw new Error("Votre panier est vide.");
+      throw new HttpError(400, "Votre panier est vide.");
     }
 
     const productIds = cartItems.map((item: any) => item.productId);
@@ -254,7 +283,7 @@ Deno.serve(async (req) => {
       .in("id", productIds);
 
     if (productsError) {
-      throw new Error(`Erreur produits: ${productsError.message}`);
+      throw new HttpError(500, `Erreur produits: ${productsError.message}`);
     }
 
     const productsMap = new Map<number, any>();
@@ -269,31 +298,31 @@ Deno.serve(async (req) => {
       const product = productsMap.get(Number(item.productId));
 
       if (!product) {
-        throw new Error("Un produit du panier est introuvable.");
+        throw new HttpError(400, "Un produit du panier est introuvable.");
       }
 
       if (!product.isActive) {
-        throw new Error(`Le produit "${product.title}" n'est plus disponible.`);
+        throw new HttpError(400, `Le produit "${product.title}" n'est plus disponible.`);
       }
 
       const quantity = safeNumber(item.quantity);
       if (quantity <= 0) {
-        throw new Error(`Quantité invalide pour "${product.title}".`);
+        throw new HttpError(400, `Quantité invalide pour "${product.title}".`);
       }
 
       if (safeNumber(product.stock) < quantity) {
-        throw new Error(`Stock insuffisant pour "${product.title}".`);
+        throw new HttpError(400, `Stock insuffisant pour "${product.title}".`);
       }
 
       if (!product.artistId) {
-        throw new Error(`Artiste introuvable pour "${product.title}".`);
+        throw new HttpError(400, `Artiste introuvable pour "${product.title}".`);
       }
 
       artistIds.add(Number(product.artistId));
 
       const unitAmount = Math.round(safeNumber(product.price) * 100);
       if (unitAmount <= 0) {
-        throw new Error(`Prix invalide pour "${product.title}".`);
+        throw new HttpError(400, `Prix invalide pour "${product.title}".`);
       }
 
       productsSubtotalCents += unitAmount * quantity;
@@ -311,7 +340,8 @@ Deno.serve(async (req) => {
     });
 
     if (artistIds.size !== 1) {
-      throw new Error(
+      throw new HttpError(
+        400,
         "Le paiement Stripe n'accepte pour l'instant que des œuvres d'un seul artiste par commande."
       );
     }
@@ -339,23 +369,23 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (artistError) {
-      throw new Error(`Erreur artiste: ${artistError.message}`);
+      throw new HttpError(500, `Erreur artiste: ${artistError.message}`);
     }
 
     if (!artist) {
-      throw new Error("Artiste introuvable.");
+      throw new HttpError(404, "Artiste introuvable.");
     }
 
     if (artist.isActive === false) {
-      throw new Error("Cet artiste n'est plus actif.");
+      throw new HttpError(400, "Cet artiste n'est plus actif.");
     }
 
     if (!artist.stripeAccountId) {
-      throw new Error("Le compte Stripe de l'artiste n'est pas connecté.");
+      throw new HttpError(400, "Le compte Stripe de l'artiste n'est pas connecté.");
     }
 
-    if (artist.stripeOnboardingComplete === false) {
-      throw new Error("Le compte Stripe de l'artiste n'est pas entièrement configuré.");
+    if (!artist.stripeOnboardingComplete) {
+      throw new HttpError(400, "Le compte Stripe de l'artiste n'est pas entièrement configuré.");
     }
 
     const artistShippingSettings = buildArtistShippingSettings(
@@ -391,6 +421,7 @@ Deno.serve(async (req) => {
     const metadata = {
       buyerUserId: String(appUser.id),
       artistId: String(artistId),
+      stripeAccountId: String(artist.stripeAccountId),
       shippingMethod: shippingConfig.shippingMethod,
       shippingLabel: shippingConfig.shippingLabel,
       shippingCostCents: String(shippingCostCents),
@@ -411,6 +442,15 @@ Deno.serve(async (req) => {
       shippingEmail,
       shippingPhone,
     };
+
+    console.log("create-checkout-session split payment", {
+      artistId,
+      stripeAccountId: artist.stripeAccountId,
+      productsSubtotalCents,
+      shippingCostCents,
+      totalAmountCents,
+      applicationFeeAmount,
+    });
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -438,6 +478,7 @@ Deno.serve(async (req) => {
         productsSubtotalCents,
         totalAmountCents,
         applicationFeeAmountCents: applicationFeeAmount,
+        destinationStripeAccountId: artist.stripeAccountId,
         isFreeShipping: shippingConfig.isFreeShipping,
         shippingCountries: artistShippingSettings.shippingCountries,
         shippingProcessingDays: artistShippingSettings.shippingProcessingDays,
@@ -452,6 +493,36 @@ Deno.serve(async (req) => {
     );
   } catch (error) {
     console.error("create-checkout-session error:", error);
+
+    if (error instanceof Stripe.errors.StripeError) {
+      return new Response(
+        JSON.stringify({
+          error: error.message || "Erreur Stripe inconnue",
+        }),
+        {
+          status: typeof error.statusCode === "number" ? error.statusCode : 400,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+    }
+
+    if (error instanceof HttpError) {
+      return new Response(
+        JSON.stringify({
+          error: error.message,
+        }),
+        {
+          status: error.status,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+    }
 
     const message = error instanceof Error ? error.message : "Erreur inconnue";
 

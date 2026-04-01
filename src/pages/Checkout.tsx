@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, Loader2, AlertCircle } from "lucide-react";
+import {
+  ArrowLeft,
+  Loader2,
+  AlertCircle,
+  PackageCheck,
+  Truck,
+  BadgeCheck,
+  Sparkles,
+} from "lucide-react";
 import { supabase } from "../lib/supabase";
 
 type Product = {
@@ -563,6 +571,34 @@ export default function Checkout() {
       </div>
 
       <div className="mx-auto max-w-5xl px-4 py-12">
+        <div className="mb-8 rounded-3xl border border-amber-100 bg-gradient-to-r from-amber-50 via-white to-amber-50 p-6">
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-700">
+            Expérience d’achat premium
+          </p>
+          <h2 className="mt-2 text-2xl font-bold text-slate-900">
+            Vous achetez une œuvre prête à être exposée
+          </h2>
+          <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-600">
+            Chaque commande correspond à une œuvre produite en version physique premium,
+            fabriquée à la demande, préparée avec soin et livrée directement chez vous.
+          </p>
+
+          <div className="mt-5 grid grid-cols-1 gap-3 text-sm text-slate-700 sm:grid-cols-3">
+            <div className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-sm">
+              <PackageCheck className="h-4 w-4 text-amber-600" />
+              Œuvre physique premium
+            </div>
+            <div className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-sm">
+              <BadgeCheck className="h-4 w-4 text-amber-600" />
+              Fabrication à la demande
+            </div>
+            <div className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-sm">
+              <Truck className="h-4 w-4 text-amber-600" />
+              Livraison directe
+            </div>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
           <div className="lg:col-span-2">
             <form ref={formRef}>
@@ -818,12 +854,37 @@ export default function Checkout() {
                     <div>
                       <p className="font-semibold text-slate-900">{item.product.title}</p>
                       <p className="text-sm text-slate-600">Quantité : {item.quantity}</p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Produit fini premium, fabriqué à la demande
+                      </p>
                     </div>
                     <p className="font-semibold text-slate-900">
                       {(item.product.price * item.quantity).toFixed(2)}€
                     </p>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            <div className="mb-8 rounded-2xl border border-slate-200 bg-white p-6">
+              <div className="mb-4 inline-flex items-center gap-2 text-amber-700">
+                <Sparkles className="h-4 w-4" />
+                <span className="text-sm font-semibold">Ce que vous recevez</span>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 text-sm text-slate-700 sm:grid-cols-2">
+                <div className="rounded-xl bg-slate-50 p-4">
+                  Une œuvre imprimée en qualité premium
+                </div>
+                <div className="rounded-xl bg-slate-50 p-4">
+                  Production réalisée à la demande
+                </div>
+                <div className="rounded-xl bg-slate-50 p-4">
+                  Finitions soignées prêtes à être exposées
+                </div>
+                <div className="rounded-xl bg-slate-50 p-4">
+                  Livraison directe à votre adresse
+                </div>
               </div>
             </div>
 
@@ -836,6 +897,9 @@ export default function Checkout() {
                     paiement en toute sécurité.
                   </p>
                   <p className="mt-2">
+                    Cette commande concerne un produit physique premium fabriqué après validation du paiement.
+                  </p>
+                  <p className="mt-2">
                     Pays desservis : {artistShippingSettings.shippingCountries}
                   </p>
                   <p className="mt-1">
@@ -844,6 +908,17 @@ export default function Checkout() {
                   </p>
                 </div>
               </div>
+            </div>
+
+            <div className="mb-8 rounded-xl border border-slate-200 bg-slate-50 p-6">
+              <h3 className="mb-3 text-sm font-semibold text-slate-900">
+                Livraison & production
+              </h3>
+
+              <p className="text-sm leading-7 text-slate-600">
+                Chaque œuvre est produite après votre commande afin de garantir un rendu optimal.
+                Le délai inclut la fabrication ainsi que la livraison sécurisée jusqu’à votre domicile.
+              </p>
             </div>
           </div>
 
@@ -854,6 +929,10 @@ export default function Checkout() {
               </div>
 
               <div className="space-y-4 p-6">
+                <div className="mb-1 inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">
+                  Œuvre physique • Production à la demande • Livraison incluse selon option
+                </div>
+
                 <div className="flex justify-between text-slate-600">
                   <span>Sous-total</span>
                   <span>{subtotal.toFixed(2)}€</span>
@@ -874,8 +953,8 @@ export default function Checkout() {
                     {shippingMethod === "pickup"
                       ? "Gratuite"
                       : isFreeShipping
-                        ? "Offerte"
-                        : `${shippingCost.toFixed(2)}€`}
+                      ? "Offerte"
+                      : `${shippingCost.toFixed(2)}€`}
                   </span>
                 </div>
 
@@ -925,7 +1004,11 @@ export default function Checkout() {
                   )}
                 </button>
 
-                <p className="mt-4 text-center text-xs text-slate-500">
+                <p className="mt-3 text-center text-xs text-slate-500">
+                  Paiement sécurisé. Votre œuvre est produite uniquement après validation de la commande.
+                </p>
+
+                <p className="mt-2 text-center text-xs text-slate-500">
                   Le paiement sera effectué sur la page sécurisée de Stripe.
                 </p>
               </div>

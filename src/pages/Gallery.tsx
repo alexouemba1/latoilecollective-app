@@ -1,6 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { ShoppingCart, Search, Filter, Heart, House } from "lucide-react";
+import { Helmet } from "react-helmet-async";
+import {
+  ShoppingCart,
+  Search,
+  Filter,
+  Heart,
+  House,
+  Sparkles,
+  PackageCheck,
+  Truck,
+  BadgeCheck,
+} from "lucide-react";
 import { supabase } from "../lib/supabase";
 
 type Product = {
@@ -65,6 +76,42 @@ function updateGalleryUrlSearch(searchValue: string) {
   }
 
   window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+}
+
+function getProductFormatMessage(category: string): string {
+  const normalized = String(category || "").toLowerCase();
+
+  if (normalized.includes("photographie")) {
+    return "Photographie imprimée premium, produite à la demande.";
+  }
+
+  if (normalized.includes("dessin")) {
+    return "Dessin reproduit en impression haut de gamme.";
+  }
+
+  if (normalized.includes("peinture")) {
+    return "Œuvre imprimée sur support premium, prête à habiter votre espace.";
+  }
+
+  return "Œuvre produite en version physique premium, avec finition soignée.";
+}
+
+function getProjectionMessage(category: string): string {
+  const normalized = String(category || "").toLowerCase();
+
+  if (normalized.includes("peinture")) {
+    return "Pensée pour apporter caractère, chaleur visuelle et présence à votre intérieur.";
+  }
+
+  if (normalized.includes("photographie")) {
+    return "Idéale pour insuffler profondeur, élégance et atmosphère à un espace soigné.";
+  }
+
+  if (normalized.includes("dessin")) {
+    return "Une pièce expressive pour enrichir un intérieur avec style et personnalité.";
+  }
+
+  return "Une création pensée pour devenir une vraie présence décorative dans votre espace.";
 }
 
 export default function Gallery() {
@@ -336,10 +383,18 @@ export default function Gallery() {
 
   return (
     <div className="min-h-screen bg-slate-50">
+      <Helmet>
+        <title>Galerie d’art en ligne | Œuvres contemporaines à acheter | La Toile Collective</title>
+        <meta
+          name="description"
+          content="Découvrez des œuvres d’art uniques : peintures, photographies et créations contemporaines. Impression premium, fabrication à la demande et livraison directe."
+        />
+      </Helmet>
+
       <div className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto max-w-7xl px-4 py-6">
-          <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-center gap-3">
+        <div className="mx-auto max-w-7xl px-4 py-4">
+          <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <Link
                 href="/"
                 className="text-2xl font-bold tracking-tight text-slate-900 transition hover:text-amber-600"
@@ -347,54 +402,103 @@ export default function Gallery() {
                 La Toile Collective
               </Link>
 
-              <Link
-                href="/"
-                className="inline-flex items-center rounded-xl border border-slate-300 px-4 py-2 text-slate-700 transition hover:bg-slate-100"
-              >
-                <House className="mr-2 h-4 w-4" />
-                Accueil
-              </Link>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              {isAuthenticated && (
+              <div className="flex flex-wrap gap-2">
                 <Link
-                  href="/favorites"
+                  href="/"
                   className="inline-flex items-center rounded-xl border border-slate-300 px-4 py-2 text-slate-700 transition hover:bg-slate-100"
                 >
-                  <Heart className="mr-2 h-4 w-4" />
-                  Favoris
+                  <House className="mr-2 h-4 w-4" />
+                  Accueil
                 </Link>
-              )}
 
-              <Link
-                href="/cart"
-                className="inline-flex items-center rounded-xl border border-slate-300 px-4 py-2 text-slate-700 transition hover:bg-slate-100"
-              >
-                <ShoppingCart className="mr-2 h-4 w-4" />
-                Panier
-              </Link>
+                <Link
+                  href="/cart"
+                  className="inline-flex items-center rounded-xl border border-slate-300 px-4 py-2 text-slate-700 transition hover:bg-slate-100"
+                >
+                  <ShoppingCart className="mr-2 h-4 w-4" />
+                  Panier
+                </Link>
+
+                {isAuthenticated && (
+                  <Link
+                    href="/favorites"
+                    className="inline-flex items-center rounded-xl border border-slate-300 px-4 py-2 text-slate-700 transition hover:bg-slate-100"
+                  >
+                    <Heart className="mr-2 h-4 w-4" />
+                    Favoris
+                  </Link>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="mb-3 rounded-2xl border border-amber-100 bg-gradient-to-r from-amber-50 via-white to-amber-50 px-4 py-3 md:mb-4 md:rounded-3xl md:px-5 md:py-4">
+            <div className="md:hidden">
+              <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700">
+                <Sparkles className="h-3.5 w-3.5" />
+                Galerie premium multi-artistes
+              </div>
+
+              <p className="mt-2 text-sm leading-6 text-slate-700">
+                Prix du produit fini : impression premium, fabrication à la demande et livraison directe.
+              </p>
+            </div>
+
+            <div className="hidden md:block">
+              <div className="flex flex-col gap-4">
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-700">
+                    Galerie premium multi-artistes
+                  </p>
+
+                  <h1 className="mt-2 max-w-4xl text-3xl font-bold leading-tight text-slate-900">
+                    Des œuvres pensées pour devenir de vraies pièces décoratives
+                  </h1>
+
+                  <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-600">
+                    Ici, le prix correspond au produit fini : une œuvre imprimée en version physique
+                    premium, fabriquée à la demande, préparée avec soin et livrée directement au client.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 text-sm text-slate-700 shadow-sm">
+                    <PackageCheck className="h-4 w-4 text-amber-600" />
+                    Produit physique premium
+                  </div>
+
+                  <div className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 text-sm text-slate-700 shadow-sm">
+                    <BadgeCheck className="h-4 w-4 text-amber-600" />
+                    Fabrication à la demande
+                  </div>
+
+                  <div className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 text-sm text-slate-700 shadow-sm">
+                    <Truck className="h-4 w-4 text-amber-600" />
+                    Livraison directe
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
           <div className="relative">
-            <Search className="absolute left-3 top-3 h-5 w-5 text-slate-400" />
+            <Search className="absolute left-3 top-3.5 h-5 w-5 text-slate-400" />
             <input
-              placeholder="Rechercher une œuvre, une description ou un mot-clé..."
+              placeholder="Rechercher une œuvre, un style ou un mot-clé..."
               value={search}
               onChange={(e) => {
                 const value = e.target.value;
                 setSearch(value);
                 updateGalleryUrlSearch(value);
               }}
-              className="w-full rounded-xl border border-slate-300 bg-white py-3 pl-10 pr-4 outline-none transition focus:border-amber-500"
+              className="w-full rounded-xl border border-slate-300 bg-white py-3 pl-10 pr-4 text-base outline-none transition focus:border-amber-500"
             />
           </div>
         </div>
       </div>
 
-      <div className="mx-auto max-w-7xl px-4 py-8">
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-4">
+      <div className="mx-auto max-w-7xl px-4 py-5 md:py-8">
+        <div className="grid grid-cols-1 gap-6 md:gap-8 lg:grid-cols-4">
           <div className={`lg:block ${showFilters ? "block" : "hidden"}`}>
             <div className="sticky top-24 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
               <h2 className="mb-6 flex items-center gap-2 text-xl font-semibold text-slate-900">
@@ -466,7 +570,24 @@ export default function Gallery() {
           </div>
 
           <div className="lg:col-span-3">
-            <div className="mb-6 flex items-center justify-between lg:hidden">
+            <div className="mb-6 max-w-3xl">
+              <h1 className="text-2xl font-bold text-slate-900 md:text-4xl">
+                Galerie d’art en ligne – œuvres contemporaines à acheter
+              </h1>
+
+              <p className="mt-3 text-slate-600">
+                Découvrez une sélection d’œuvres d’art contemporaines pensées pour transformer votre intérieur.
+                Chaque création est proposée en version physique premium : impression haut de gamme,
+                fabrication à la demande et livraison directe chez vous.
+              </p>
+
+              <p className="mt-2 text-slate-600">
+                Peinture moderne, photographie artistique, dessin ou création abstraite :
+                trouvez une œuvre unique qui apporte caractère, émotion et présence à votre espace.
+              </p>
+            </div>
+
+            <div className="mb-4 flex items-center justify-between lg:hidden">
               <h2 className="text-xl font-bold text-slate-900">
                 {products.length} œuvre{products.length !== 1 ? "s" : ""}
               </h2>
@@ -485,12 +606,14 @@ export default function Gallery() {
             ) : error ? (
               <div className="py-20 text-center text-red-600">Erreur Supabase : {error}</div>
             ) : products.length > 0 ? (
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
                 {products.map((product, index) => {
                   const isFavorite = favoriteProductIds.includes(product.id);
                   const isFavoriteLoading = favoriteLoadingIds.includes(product.id);
                   const isOutOfStock = product.stock <= 0;
                   const isNew = index < 3;
+                  const formatMessage = getProductFormatMessage(product.category);
+                  const projectionMessage = getProjectionMessage(product.category);
 
                   return (
                     <div
@@ -503,12 +626,12 @@ export default function Gallery() {
                             <div className="relative h-64 overflow-hidden bg-slate-100">
                               <img
                                 src={product.images[0]}
-                                alt={product.title}
+                                alt={`${product.title} - ${product.category} - œuvre d’art contemporaine`}
                                 loading="lazy"
                                 decoding="async"
-                               className={`h-full w-full object-cover object-top transition duration-700 ease-out group-hover:scale-105 ${
-  isOutOfStock ? "opacity-75" : ""
-}`}
+                                className={`h-full w-full object-cover object-top transition duration-700 ease-out group-hover:scale-105 ${
+                                  isOutOfStock ? "opacity-75" : ""
+                                }`}
                               />
 
                               <div className="absolute right-3 top-3 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-slate-900 shadow backdrop-blur">
@@ -559,16 +682,30 @@ export default function Gallery() {
                         </button>
                       </div>
 
-                      <div className="p-6">
+                      <div className="p-5 md:p-6">
+                        <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800">
+                          <Sparkles className="h-3.5 w-3.5" />
+                          Produit fini premium
+                        </div>
+
                         <Link href={`/product/${product.id}`} className="block">
                           <h3 className="mb-2 line-clamp-2 text-xl font-semibold text-slate-900">
-                            {product.title}
+                            {product.title} – {product.category}
                           </h3>
                         </Link>
 
-                        <p className="mb-2 line-clamp-2 text-slate-600">
-                          {product.description || "Pas de description"}
+                        <p className="mb-3 text-sm font-medium leading-6 text-slate-800">
+                          {formatMessage}
                         </p>
+
+                        <p className="mb-3 line-clamp-3 text-slate-600">
+                          {product.description ||
+                            "Une œuvre conçue pour apporter présence, élégance et singularité à votre espace."}
+                        </p>
+
+                        <div className="mb-4 rounded-2xl border border-slate-100 bg-slate-50 p-3">
+                          <p className="text-sm leading-6 text-slate-700">{projectionMessage}</p>
+                        </div>
 
                         {Array.isArray(product.keywords) && product.keywords.length > 0 && (
                           <div className="mb-3 flex flex-wrap gap-2">
@@ -598,17 +735,34 @@ export default function Gallery() {
                           <p className="mb-4 text-sm text-slate-500">Artiste inconnu</p>
                         )}
 
-                        <div className="flex items-end justify-between">
+                        <div className="mb-4 space-y-2 text-sm text-slate-700">
+                          <div className="inline-flex w-full items-center gap-2 rounded-xl bg-slate-50 px-3 py-2">
+                            <PackageCheck className="h-4 w-4 text-amber-600" />
+                            Production à la demande
+                          </div>
+
+                          <div className="inline-flex w-full items-center gap-2 rounded-xl bg-slate-50 px-3 py-2">
+                            <Truck className="h-4 w-4 text-amber-600" />
+                            Livraison directe au client
+                          </div>
+                        </div>
+
+                        <p className="sr-only">
+                          Acheter {product.title}, œuvre d’art {product.category} en version physique premium,
+                          impression haut de gamme et livraison directe.
+                        </p>
+
+                        <div className="flex items-end justify-between gap-4">
                           <div>
-                            <p className="text-2xl font-bold text-amber-600">
-                              {product.price.toFixed(2)}€
+                            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-400">
+                              Prix visible sur la fiche
                             </p>
                             <p
-                              className={`text-sm ${
+                              className={`mt-1 text-sm ${
                                 isOutOfStock ? "font-semibold text-red-600" : "text-slate-500"
                               }`}
                             >
-                              {isOutOfStock ? "Rupture de stock" : `Stock : ${product.stock}`}
+                              {isOutOfStock ? "Rupture de stock" : `Disponible : ${product.stock}`}
                             </p>
                           </div>
 
@@ -619,9 +773,9 @@ export default function Gallery() {
                           ) : (
                             <Link
                               href={`/product/${product.id}`}
-                              className="rounded-xl bg-amber-600 p-2 text-white shadow transition hover:scale-105 hover:bg-amber-700"
+                              className="rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white shadow transition hover:scale-105 hover:bg-amber-700"
                             >
-                              <ShoppingCart className="h-4 w-4" />
+                              Voir l’œuvre
                             </Link>
                           )}
                         </div>

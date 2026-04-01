@@ -10,6 +10,12 @@ import {
   CheckCircle2,
   AlertCircle,
   Info,
+  Truck,
+  ShieldCheck,
+  Palette,
+  PackageCheck,
+  Frame,
+  Star,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
@@ -40,22 +46,95 @@ function getCategoryProjection(category: string) {
   const normalized = String(category || "").toLowerCase();
 
   if (normalized.includes("peinture")) {
-    return "Parfaite pour donner du caractère à un salon, un bureau ou un intérieur contemporain.";
+    return "Une création idéale pour apporter du caractère, de la chaleur visuelle et une présence forte à un salon, un bureau ou un intérieur contemporain.";
   }
 
   if (normalized.includes("photographie")) {
-    return "Idéale pour apporter présence visuelle, élégance et profondeur à un espace moderne.";
+    return "Une œuvre parfaite pour insuffler élégance, profondeur et atmosphère à un espace moderne ou raffiné.";
   }
 
   if (normalized.includes("sculpture")) {
-    return "Une pièce forte pour créer un point focal raffiné dans un intérieur soigné.";
+    return "Une pièce pensée pour devenir un point focal sophistiqué et donner du relief à un intérieur soigné.";
   }
 
   if (normalized.includes("dessin")) {
-    return "Une création subtile pour enrichir un espace avec sensibilité, style et personnalité.";
+    return "Une création subtile et expressive, parfaite pour enrichir un espace avec style, sensibilité et personnalité.";
   }
 
-  return "Une œuvre pensée pour trouver naturellement sa place dans un intérieur élégant et inspiré.";
+  return "Une œuvre pensée pour trouver naturellement sa place dans un intérieur élégant, vivant et inspiré.";
+}
+
+function getCategoryLabel(category: string) {
+  const normalized = String(category || "").toLowerCase();
+
+  if (normalized.includes("peinture")) return "Tirage d’art premium";
+  if (normalized.includes("photographie")) return "Photographie imprimée premium";
+  if (normalized.includes("sculpture")) return "Œuvre de décoration premium";
+  if (normalized.includes("dessin")) return "Dessin imprimé premium";
+  return "Œuvre imprimée premium";
+}
+
+function getSeoTitle(product: Product) {
+  return `${product.title} | ${product.category} premium | La Toile Collective`;
+}
+
+function getSeoDescription(product: Product) {
+  const baseDescription =
+    product.description?.trim() ||
+    "Une œuvre conçue pour apporter présence, élégance et singularité à votre espace.";
+
+  return `${product.title} – ${product.category}. ${baseDescription} Produit physique premium, fabrication à la demande et livraison directe.`;
+}
+
+function upsertMetaByName(name: string, content: string) {
+  let element = document.querySelector(`meta[name="${name}"]`) as HTMLMetaElement | null;
+
+  if (!element) {
+    element = document.createElement("meta");
+    element.setAttribute("name", name);
+    document.head.appendChild(element);
+  }
+
+  element.setAttribute("content", content);
+}
+
+function upsertMetaByProperty(property: string, content: string) {
+  let element = document.querySelector(
+    `meta[property="${property}"]`
+  ) as HTMLMetaElement | null;
+
+  if (!element) {
+    element = document.createElement("meta");
+    element.setAttribute("property", property);
+    document.head.appendChild(element);
+  }
+
+  element.setAttribute("content", content);
+}
+
+function upsertCanonical(url: string) {
+  let element = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
+
+  if (!element) {
+    element = document.createElement("link");
+    element.setAttribute("rel", "canonical");
+    document.head.appendChild(element);
+  }
+
+  element.setAttribute("href", url);
+}
+
+function upsertJsonLd(id: string, data: Record<string, unknown>) {
+  let element = document.getElementById(id) as HTMLScriptElement | null;
+
+  if (!element) {
+    element = document.createElement("script");
+    element.type = "application/ld+json";
+    element.id = id;
+    document.head.appendChild(element);
+  }
+
+  element.textContent = JSON.stringify(data);
 }
 
 export default function ProductDetail() {
@@ -232,6 +311,101 @@ export default function ProductDetail() {
     };
   }, [isImageModalOpen]);
 
+  useEffect(() => {
+    if (!product) {
+      document.title = "Produit | La Toile Collective";
+      return;
+    }
+
+    const title = getSeoTitle(product);
+    const description = getSeoDescription(product);
+    const canonicalUrl =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/product/${product.id}`
+        : `/product/${product.id}`;
+    const imageUrl = product.images?.[0] || "";
+
+    document.title = title;
+    upsertMetaByName("description", description);
+    upsertCanonical(canonicalUrl);
+
+    upsertMetaByProperty("og:title", title);
+    upsertMetaByProperty("og:description", description);
+    upsertMetaByProperty("og:type", "product");
+    upsertMetaByProperty("og:url", canonicalUrl);
+
+    if (imageUrl) {
+      upsertMetaByProperty("og:image", imageUrl);
+    }
+
+    upsertMetaByName("twitter:card", "summary_large_image");
+    upsertMetaByName("twitter:title", title);
+    upsertMetaByName("twitter:description", description);
+
+    if (imageUrl) {
+      upsertMetaByName("twitter:image", imageUrl);
+    }
+
+    const productSchema: Record<string, unknown> = {
+      "@context": "https://schema.org",
+      "@type": "Product",
+      name: product.title,
+      description,
+      image: product.images || [],
+      category: product.category,
+      sku: String(product.id),
+      brand: {
+        "@type": "Brand",
+        name: "La Toile Collective",
+      },
+      offers: {
+        "@type": "Offer",
+        priceCurrency: "EUR",
+        price: product.price.toFixed(2),
+        availability:
+          product.stock > 0
+            ? "https://schema.org/InStock"
+            : "https://schema.org/OutOfStock",
+        itemCondition: "https://schema.org/NewCondition",
+        url: canonicalUrl,
+      },
+    };
+
+    const breadcrumbSchema: Record<string, unknown> = {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        {
+          "@type": "ListItem",
+          position: 1,
+          name: "Accueil",
+          item:
+            typeof window !== "undefined"
+              ? `${window.location.origin}/`
+              : "/",
+        },
+        {
+          "@type": "ListItem",
+          position: 2,
+          name: "Galerie",
+          item:
+            typeof window !== "undefined"
+              ? `${window.location.origin}/gallery`
+              : "/gallery",
+        },
+        {
+          "@type": "ListItem",
+          position: 3,
+          name: product.title,
+          item: canonicalUrl,
+        },
+      ],
+    };
+
+    upsertJsonLd("product-jsonld", productSchema);
+    upsertJsonLd("breadcrumb-jsonld", breadcrumbSchema);
+  }, [product]);
+
   const handleToggleFavorite = async () => {
     if (!product) return;
 
@@ -347,6 +521,7 @@ export default function ProductDetail() {
   const mainImage = images[selectedImageIndex] || images[0] || "";
   const isOutOfStock = !product || product.stock <= 0;
   const projectionText = product ? getCategoryProjection(product.category) : "";
+  const categoryLabel = product ? getCategoryLabel(product.category) : "Œuvre imprimée premium";
 
   const toastStyles =
     toast.type === "success"
@@ -461,16 +636,17 @@ export default function ProductDetail() {
           <div>
             {images.length > 0 ? (
               <div className="space-y-4">
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
                   <button
                     type="button"
                     onClick={() => setIsImageModalOpen(true)}
-                    className="block w-full cursor-zoom-in rounded-xl bg-slate-100"
+                    className="block w-full cursor-zoom-in rounded-2xl bg-slate-100"
+                    aria-label="Agrandir l'image"
                   >
-                    <div className="flex h-[600px] items-center justify-center overflow-hidden rounded-xl bg-slate-100">
+                    <div className="flex h-[600px] items-center justify-center overflow-hidden rounded-2xl bg-slate-100">
                       <img
                         src={mainImage}
-                        alt={product.title}
+                        alt={`${product.title} - ${product.category} - œuvre d’art premium`}
                         loading="eager"
                         decoding="async"
                         className="max-h-full max-w-full object-contain"
@@ -495,7 +671,7 @@ export default function ProductDetail() {
                         <div className="flex h-20 items-center justify-center overflow-hidden rounded-lg bg-slate-100">
                           <img
                             src={img}
-                            alt={`${product.title} ${idx + 1}`}
+                            alt={`${product.title} ${idx + 1} - vue ${idx + 1}`}
                             loading="lazy"
                             decoding="async"
                             className="h-full w-full object-cover"
@@ -505,6 +681,19 @@ export default function ProductDetail() {
                     ))}
                   </div>
                 )}
+
+                <div className="rounded-2xl border border-amber-100 bg-amber-50/70 p-5">
+                  <div className="mb-3 inline-flex items-center gap-2 text-amber-800">
+                    <Palette className="h-4 w-4" />
+                    <span className="text-sm font-semibold">Ce que vous voyez devient une pièce réelle</span>
+                  </div>
+
+                  <p className="text-sm leading-7 text-slate-700">
+                    Cette création n’est pas vendue comme un simple visuel numérique. Elle est destinée
+                    à être produite en version physique premium, avec une finition soignée et une
+                    présence pensée pour l’intérieur.
+                  </p>
+                </div>
               </div>
             ) : (
               <div className="flex h-[600px] items-center justify-center rounded-2xl bg-gradient-to-br from-slate-200 to-slate-300">
@@ -514,10 +703,9 @@ export default function ProductDetail() {
           </div>
 
           <div className="space-y-6">
-            <div className="inline-block">
-              <span className="rounded-full bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-900">
-                {product.category}
-              </span>
+            <div className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900">
+              <Sparkles className="h-4 w-4" />
+              {categoryLabel}
             </div>
 
             <div>
@@ -529,7 +717,7 @@ export default function ProductDetail() {
               </p>
 
               <div className="mt-5 rounded-2xl border border-amber-100 bg-amber-50/70 p-4">
-                <p className="text-sm font-medium text-slate-800">{projectionText}</p>
+                <p className="text-sm font-medium leading-7 text-slate-800">{projectionText}</p>
               </div>
             </div>
 
@@ -558,34 +746,82 @@ export default function ProductDetail() {
               </div>
             )}
 
-            <div className="border-y border-slate-200 py-6">
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
               <p className="mb-2 text-5xl font-bold text-amber-600">
                 {product.price.toFixed(2)}€
               </p>
-              <p className="text-slate-600">
-                Stock disponible : <span className="font-semibold">{product.stock}</span>
+
+              <p className="text-base font-medium text-slate-800">
+                Œuvre imprimée sur support premium, fabriquée à la demande
               </p>
+
+              <div className="mt-4 grid grid-cols-1 gap-3 text-sm text-slate-700 sm:grid-cols-2">
+                <div className="rounded-xl bg-slate-50 p-3">🖼️ Produit physique, pas un fichier numérique</div>
+                <div className="rounded-xl bg-slate-50 p-3">🏭 Production professionnelle via notre atelier partenaire</div>
+                <div className="rounded-xl bg-slate-50 p-3">📦 Emballage protégé pour une réception soignée</div>
+                <div className="rounded-xl bg-slate-50 p-3">🚚 Livraison directement au client final</div>
+              </div>
+
+              <div className="mt-5 flex flex-wrap items-center gap-3 text-sm text-slate-600">
+                <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 font-medium text-emerald-700">
+                  <CheckCircle2 className="h-4 w-4" />
+                  {product.stock > 0 ? "Disponible à la commande" : "Rupture temporaire"}
+                </span>
+
+                <span className="rounded-full bg-slate-100 px-3 py-1.5">
+                  Quantité disponible : <span className="font-semibold">{product.stock}</span>
+                </span>
+              </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
               <div className="mb-4 inline-flex items-center gap-2 text-amber-700">
-                <Sparkles className="h-4 w-4" />
+                <PackageCheck className="h-4 w-4" />
+                <span className="text-sm font-semibold">Ce que vous recevez</span>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 text-sm text-slate-700 sm:grid-cols-2">
+                <div className="rounded-xl bg-slate-50 p-4">
+                  <p className="font-semibold text-slate-900">Impression premium</p>
+                  <p className="mt-1 leading-6 text-slate-600">
+                    Une reproduction haut de gamme pensée pour respecter la présence visuelle de l’œuvre.
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-slate-50 p-4">
+                  <p className="font-semibold text-slate-900">Fabrication à la demande</p>
+                  <p className="mt-1 leading-6 text-slate-600">
+                    Chaque commande est lancée après achat pour garantir une exécution soignée.
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-slate-50 p-4">
+                  <p className="font-semibold text-slate-900">Finition premium</p>
+                  <p className="mt-1 leading-6 text-slate-600">
+                    Rendu propre, présence décorative forte et sensation de pièce choisie avec exigence.
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-slate-50 p-4">
+                  <p className="font-semibold text-slate-900">Livraison directe</p>
+                  <p className="mt-1 leading-6 text-slate-600">
+                    Le produit fini est expédié directement au client avec un parcours sécurisé.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-amber-100 bg-gradient-to-br from-amber-50 to-white p-6">
+              <div className="mb-3 inline-flex items-center gap-2 text-amber-700">
+                <BadgeCheck className="h-4 w-4" />
                 <span className="text-sm font-semibold">Pourquoi cette œuvre séduit</span>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 text-sm text-slate-600 sm:grid-cols-2">
-                <div className="rounded-xl bg-slate-50 p-3">
-                  Présence visuelle forte et élégante
-                </div>
-                <div className="rounded-xl bg-slate-50 p-3">
-                  Parfaite pour enrichir un intérieur soigné
-                </div>
-                <div className="rounded-xl bg-slate-50 p-3">
-                  Œuvre premium pensée pour durer
-                </div>
-                <div className="rounded-xl bg-slate-50 p-3">
-                  Achat simple, fabrication qualitative
-                </div>
+              <div className="grid grid-cols-1 gap-3 text-sm text-slate-700 sm:grid-cols-2">
+                <div className="rounded-xl bg-white/80 p-3">Présence visuelle forte et élégante</div>
+                <div className="rounded-xl bg-white/80 p-3">Pensée pour sublimer un intérieur</div>
+                <div className="rounded-xl bg-white/80 p-3">Impression haut de gamme, fidèle et soignée</div>
+                <div className="rounded-xl bg-white/80 p-3">Expérience d’achat fluide, crédible et premium</div>
               </div>
             </div>
 
@@ -625,23 +861,9 @@ export default function ProductDetail() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-amber-100 bg-gradient-to-br from-amber-50 to-white p-5">
-              <div className="mb-3 inline-flex items-center gap-2 text-amber-700">
-                <BadgeCheck className="h-4 w-4" />
-                <span className="text-sm font-semibold">Qualité & expérience</span>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3 text-sm text-slate-700 sm:grid-cols-2">
-                <div>Impression haut de gamme</div>
-                <div>Production à la demande</div>
-                <div>Finitions premium</div>
-                <div>Livraison sécurisée</div>
-              </div>
-            </div>
-
             <div className="space-y-3 pt-2">
               <button
-                className="w-full rounded-lg bg-amber-600 px-4 py-3 text-white hover:bg-amber-700 disabled:opacity-60"
+                className="w-full rounded-xl bg-amber-600 px-4 py-3 text-white transition hover:bg-amber-700 disabled:opacity-60"
                 onClick={handleAddToCart}
                 disabled={isOutOfStock || addingToCart}
               >
@@ -651,12 +873,12 @@ export default function ProductDetail() {
                     ? "Rupture de stock"
                     : addingToCart
                     ? "Ajout..."
-                    : "Ajouter au panier"}
+                    : "Ajouter cette œuvre au panier"}
                 </span>
               </button>
 
               <button
-                className="w-full rounded-lg border border-slate-300 px-4 py-3 hover:bg-slate-100 disabled:opacity-60"
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 transition hover:bg-slate-100 disabled:opacity-60"
                 onClick={handleToggleFavorite}
                 disabled={favoriteLoading}
               >
@@ -674,41 +896,103 @@ export default function ProductDetail() {
 
               <Link
                 href="/favorites"
-                className="block w-full rounded-lg border border-slate-300 px-4 py-3 text-center hover:bg-slate-100"
+                className="block w-full rounded-xl border border-slate-300 px-4 py-3 text-center transition hover:bg-slate-100"
               >
                 Voir mes favoris
               </Link>
             </div>
 
-            <div className="rounded-xl border border-slate-200 bg-white p-6">
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+              <h2 className="mb-4 text-lg font-semibold text-slate-900">
+                Une œuvre prête à habiter votre espace
+              </h2>
+
+              <div className="grid grid-cols-1 gap-3 text-sm text-slate-700 sm:grid-cols-2">
+                <div className="flex items-start gap-3 rounded-xl bg-slate-50 p-4">
+                  <Frame className="mt-0.5 h-5 w-5 text-amber-600" />
+                  <div>
+                    <p className="font-semibold text-slate-900">Présence décorative réelle</p>
+                    <p className="mt-1 leading-6 text-slate-600">
+                      Vous n’achetez pas seulement une image, mais une pièce pensée pour être vue, ressentie et intégrée à un intérieur.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 rounded-xl bg-slate-50 p-4">
+                  <Star className="mt-0.5 h-5 w-5 text-amber-600" />
+                  <div>
+                    <p className="font-semibold text-slate-900">Finition premium</p>
+                    <p className="mt-1 leading-6 text-slate-600">
+                      Le rendu final est conçu pour offrir plus de profondeur, de tenue visuelle et de valeur perçue.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 rounded-xl bg-slate-50 p-4">
+                  <Truck className="mt-0.5 h-5 w-5 text-amber-600" />
+                  <div>
+                    <p className="font-semibold text-slate-900">Livraison suivie</p>
+                    <p className="mt-1 leading-6 text-slate-600">
+                      Votre commande suit un parcours clair, sécurisé et pensé pour arriver dans de bonnes conditions.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 rounded-xl bg-slate-50 p-4">
+                  <ShieldCheck className="mt-0.5 h-5 w-5 text-amber-600" />
+                  <div>
+                    <p className="font-semibold text-slate-900">Achat en confiance</p>
+                    <p className="mt-1 leading-6 text-slate-600">
+                      Paiement sécurisé, plateforme structurée et expérience pensée pour rassurer autant les acheteurs que les artistes.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
               <h2 className="mb-4 text-lg font-semibold text-slate-900">
                 À propos de cette œuvre
               </h2>
 
               <div className="space-y-3 text-sm text-slate-600">
-                <div className="flex justify-between">
+                <div className="flex justify-between gap-4">
                   <span>Catégorie :</span>
-                  <span className="font-semibold text-slate-900">{product.category}</span>
+                  <span className="text-right font-semibold text-slate-900">{product.category}</span>
                 </div>
 
-                <div className="flex justify-between">
+                <div className="flex justify-between gap-4">
                   <span>Disponibilité :</span>
-                  <span className="font-semibold text-slate-900">
-                    {product.stock > 0 ? "En stock" : "Rupture"}
+                  <span className="text-right font-semibold text-slate-900">
+                    {product.stock > 0 ? "Disponible à la commande" : "Rupture"}
                   </span>
                 </div>
 
-                <div className="flex justify-between">
+                <div className="flex justify-between gap-4">
+                  <span>Format de vente :</span>
+                  <span className="text-right font-semibold text-slate-900">
+                    Produit physique premium
+                  </span>
+                </div>
+
+                <div className="flex justify-between gap-4">
+                  <span>Fabrication :</span>
+                  <span className="text-right font-semibold text-slate-900">
+                    À la demande
+                  </span>
+                </div>
+
+                <div className="flex justify-between gap-4">
                   <span>Statut :</span>
-                  <span className="font-semibold text-slate-900">
+                  <span className="text-right font-semibold text-slate-900">
                     {product.isActive ? "Actif" : "Inactif"}
                   </span>
                 </div>
 
                 {product.createdAt && (
-                  <div className="flex justify-between">
+                  <div className="flex justify-between gap-4">
                     <span>Créée le :</span>
-                    <span className="font-semibold text-slate-900">
+                    <span className="text-right font-semibold text-slate-900">
                       {new Date(product.createdAt).toLocaleDateString("fr-FR")}
                     </span>
                   </div>
@@ -716,20 +1000,29 @@ export default function ProductDetail() {
               </div>
             </div>
 
-            <div className="rounded-xl border border-slate-200 bg-white p-6">
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
               <h2 className="mb-4 text-lg font-semibold text-slate-900">
                 Bon à savoir avant achat
               </h2>
 
               <div className="space-y-3 text-sm leading-7 text-slate-600">
                 <p>
-                  Cette œuvre s’inscrit dans une expérience d’achat premium pensée pour offrir
-                  un rendu soigné, une présentation fidèle et une réception de qualité.
+                  Cette œuvre est proposée dans une logique d’expérience premium : rendu soigné,
+                  fabrication à la demande et réception pensée pour donner plus de présence à la
+                  création choisie.
                 </p>
+
                 <p>
-                  Chaque commande est traitée avec attention afin de garantir une expérience
-                  fluide, du choix de l’œuvre jusqu’à sa livraison.
+                  Le prix correspond au produit fini, à sa qualité de fabrication, à sa préparation
+                  et à son parcours de livraison — pas à un simple affichage numérique.
                 </p>
+
+                <p>
+                  La plateforme rassemble plusieurs artistes. Chaque œuvre conserve son univers,
+                  tout en bénéficiant d’un cadre de présentation, de fabrication et d’achat plus
+                  clair et plus rassurant.
+                </p>
+
                 <Link
                   href="/quality"
                   className="inline-flex items-center gap-2 font-semibold text-amber-700 hover:text-amber-800"
@@ -737,6 +1030,11 @@ export default function ProductDetail() {
                   En savoir plus sur la qualité & fabrication
                 </Link>
               </div>
+            </div>
+
+            <div className="sr-only">
+              Acheter {product.title}, {product.category} premium, produit physique imprimé, fabrication
+              à la demande, livraison directe et expérience d’achat sécurisée sur La Toile Collective.
             </div>
           </div>
         </div>
@@ -763,7 +1061,7 @@ export default function ProductDetail() {
             <div className="flex max-h-[90vh] w-full items-center justify-center rounded-xl bg-slate-100 p-4 shadow-2xl">
               <img
                 src={mainImage}
-                alt={product.title}
+                alt={`${product.title} - vue agrandie`}
                 loading="eager"
                 decoding="async"
                 className="max-h-[85vh] w-full object-contain"
